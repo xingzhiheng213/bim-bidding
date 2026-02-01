@@ -1,11 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
-import { Button, Input, Layout, message, Select, Spin, Typography } from 'antd'
+import { Button, Input, message, Select, Spin, Typography } from 'antd'
 import { getSettingsLlm, getSettingsModels, postSettingsLlm, postSettingsModels } from '../api/settings'
 import '../App.css'
 
-const { Header, Content } = Layout
 const { Title, Text } = Typography
 
 const STEP_LABELS: Record<string, string> = {
@@ -92,25 +90,10 @@ function SettingsPage() {
     data?.providers?.find((p) => p.provider === key)
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ padding: '0 24px', display: 'flex', alignItems: 'center' }}>
-        <Title level={4} style={{ color: '#fff', margin: 0 }}>
-          BIM 标书生成
-        </Title>
-        <Link to="/" style={{ color: '#fff', marginLeft: 24 }}>
-          首页
-        </Link>
-        <Link to="/settings" style={{ color: '#fff', marginLeft: 16 }}>
-          设置
-        </Link>
-        <Link to="/compare" style={{ color: '#fff', marginLeft: 16 }}>
-          对比
-        </Link>
-      </Header>
-      <Content style={{ padding: 24 }}>
-        <Title level={2} style={{ marginBottom: 16 }}>
-          设置
-        </Title>
+    <>
+      <Title level={2} style={{ marginBottom: 16 }}>
+        设置
+      </Title>
         <Title level={5} style={{ marginBottom: 12 }}>
           大模型 API
         </Title>
@@ -274,8 +257,7 @@ function SettingsPage() {
             })}
           </div>
         )}
-      </Content>
-    </Layout>
+    </>
   )
 }
 

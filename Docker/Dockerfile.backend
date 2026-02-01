@@ -1,0 +1,18 @@
+# 构建上下文为项目根目录：docker compose 中 context: .., dockerfile: Docker/Dockerfile.backend
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# 若 PyMuPDF 安装失败，可取消下面注释安装构建依赖后再 pip install
+# RUN apt-get update && apt-get install -y --no-install-recommends build-essential && rm -rf /var/lib/apt/lists/*
+
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY backend/ .
+
+# 数据目录（与 compose 中 volume 挂载一致）
+RUN mkdir -p /app/data/uploads /app/data/exports
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

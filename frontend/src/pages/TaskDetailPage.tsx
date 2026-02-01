@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
-import { DownloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Checkbox, Collapse, Input, Layout, message, Modal, Progress, Spin, Table, Typography } from 'antd'
+import { DownloadOutlined, LoadingOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Checkbox, Collapse, Input, message, Modal, Progress, Spin, Steps, Table, Tag, Typography } from 'antd'
+import type { StepStatus } from '../theme/stepStatus'
+import {
+  getStepsStatus,
+  getStepStatusLabel,
+  stepStatusDisplay,
+  TASK_STEP_ORDER,
+  STEP_TITLES,
+} from '../theme/stepStatus'
+import { designTokens } from '../theme/tokens'
 import type { ColumnsType } from 'antd/es/table'
 import {
   getFrameworkDiff,
@@ -28,7 +37,6 @@ import {
 import { DiffView } from '../components/DiffView'
 import '../App.css'
 
-const { Header, Content } = Layout
 const { Title, Text } = Typography
 
 const PREVIEW_LEN = 400
@@ -209,6 +217,50 @@ function TaskDetailPage() {
       render: (t: string) => new Date(t).toLocaleString(),
     },
   ]
+
+  const stepsItems =
+    data?.steps != null
+      ? TASK_STEP_ORDER.map((stepKey) => {
+          const step = data.steps.find((s) => s.step_key === stepKey)
+          const status: StepStatus =
+            step && ['pending', 'running', 'waiting_user', 'completed', 'failed'].includes(step.status)
+              ? (step.status as StepStatus)
+              : 'pending'
+          const stepsStatus = getStepsStatus(status)
+          const label = getStepStatusLabel(status)
+          return {
+            title: STEP_TITLES[stepKey] ?? stepKey,
+            description: label,
+            status: stepsStatus,
+            icon: status === 'running' ? <LoadingOutlined /> : undefined,
+          }
+        })
+      : []
+
+  const stepsCurrent =
+    data?.steps != null
+      ? (() => {
+          const runningOrWaitingIdx = TASK_STEP_ORDER.findIndex((key) =>
+            data.steps.some(
+              (s) => s.step_key === key && (s.status === 'running' || s.status === 'waiting_user')
+            )
+          )
+          if (runningOrWaitingIdx >= 0) return runningOrWaitingIdx
+          const firstNotDoneIdx = TASK_STEP_ORDER.findIndex((key) => {
+            const step = data.steps.find((s) => s.step_key === key)
+            const status = step?.status ?? 'pending'
+            return status !== 'completed' && status !== 'failed'
+          })
+          return firstNotDoneIdx >= 0 ? firstNotDoneIdx : TASK_STEP_ORDER.length - 1
+        })()
+      : 0
+
+  const handleStepClick = (nowStepIndex: number) => {
+    const stepKey = TASK_STEP_ORDER[nowStepIndex]
+    if (stepKey) {
+      document.getElementById(`step-${stepKey}`)?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
@@ -559,37 +611,20 @@ function TaskDetailPage() {
 
   if (!id) {
     return (
-      <Layout style={{ minHeight: '100vh' }}>
-        <Content style={{ padding: 24 }}>
-          <Text type="danger">缺少任务 ID</Text>
-          <Link to="/" style={{ marginLeft: 16 }}>
-            返回首页
-          </Link>
-        </Content>
-      </Layout>
+      <>
+        <Text type="danger">缺少任务 ID</Text>
+        <Link to="/" style={{ marginLeft: 16 }}>
+          返回首页
+        </Link>
+      </>
     )
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ padding: '0 24px', display: 'flex', alignItems: 'center' }}>
-        <Title level={4} style={{ color: '#fff', margin: 0 }}>
-          BIM 标书生成
-        </Title>
-        <Link to="/" style={{ color: '#fff', marginLeft: 24 }}>
-          首页
-        </Link>
-        <Link to="/settings" style={{ color: '#fff', marginLeft: 16 }}>
-          设置
-        </Link>
-        <Link to="/compare" style={{ color: '#fff', marginLeft: 16 }}>
-          对比
-        </Link>
-      </Header>
-      <Content style={{ padding: 24 }}>
-        <Title level={2} style={{ marginBottom: 16 }}>
-          任务详情
-        </Title>
+    <>
+      <Title level={2} style={{ marginBottom: 16 }}>
+        任务详情
+      </Title>
         {taskLoading && <Spin />}
         {taskError && (
           <Text type="danger">
@@ -609,434 +644,248 @@ function TaskDetailPage() {
               <Text>{new Date(data.created_at).toLocaleString()}</Text>
             </div>
 
-            {showUploadArea && (
-              <div style={{ marginBottom: 24 }}>
-                <Title level={5} style={{ marginBottom: 8 }}>
-                  步骤 1：上传与解析
-                </Title>
-                <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                  上传招标文件
-                </Text>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
-                  style={{ marginRight: 8 }}
-                />
-                <Button
-                  type="primary"
-                  loading={uploadMutation.isPending}
-                  disabled={!selectedFile}
-                  onClick={handleUpload}
+            {stepsItems.length > 0 && (
+              <Steps
+                current={stepsCurrent}
+                items={stepsItems}
+                onChange={handleStepClick}
+                style={{ marginBottom: designTokens.marginLG }}
+              />
+            )}
+
+            {TASK_STEP_ORDER.map((stepKey) => {
+              const step = data.steps?.find((s) => s.step_key === stepKey)
+              const status: StepStatus =
+                step && ['pending', 'running', 'waiting_user', 'completed', 'failed'].includes(step.status)
+                  ? (step.status as StepStatus)
+                  : 'pending'
+              return (
+                <Card
+                  key={stepKey}
+                  id={`step-${stepKey}`}
+                  title={STEP_TITLES[stepKey]}
+                  extra={<Tag color={stepStatusDisplay[status].tagColor}>{getStepStatusLabel(status)}</Tag>}
+                  style={{ marginBottom: designTokens.marginLG }}
                 >
-                  上传
-                </Button>
-              </div>
-            )}
-
-            {uploadStep?.status === 'completed' && uploadOutput?.original_filename && (
-              <div style={{ marginBottom: 16 }}>
-                <Text type="secondary">已上传：{uploadOutput.original_filename}</Text>
-              </div>
-            )}
-
-            {extractStep && extractStep.status !== 'pending' && (
-              <div style={{ marginBottom: 24 }}>
-                {!showUploadArea && (
-                  <Title level={5} style={{ marginBottom: 8 }}>
-                    步骤 1：上传与解析
-                  </Title>
-                )}
-                {extractStep.status === 'running' && (
-                  <Text>解析中，请稍候…</Text>
-                )}
-                {extractStep.status === 'completed' && extractText !== null && (
-                  <>
-                    <Text strong>解析完成，共 {extractText.length} 字。</Text>
-                    <Collapse
-                      style={{ marginTop: 8 }}
-                      items={[
-                        {
-                          key: 'preview',
-                          label: '预览',
-                          children: (
-                            <Typography.Paragraph
-                              style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}
+                  {stepKey === 'upload' && (
+                    <>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                        {showUploadArea ? '上传招标文件' : uploadOutput?.original_filename ? `已上传：${uploadOutput.original_filename}` : '待上传'}
+                      </Text>
+                      {showUploadArea && (
+                        <>
+                          <input
+                            type="file"
+                            accept=".pdf,.doc,.docx"
+                            onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
+                            style={{ marginRight: 8 }}
+                          />
+                          <Button
+                            type="primary"
+                            loading={uploadMutation.isPending}
+                            disabled={!selectedFile}
+                            onClick={handleUpload}
+                          >
+                            上传
+                          </Button>
+                        </>
+                      )}
+                    </>
+                  )}
+                  {stepKey === 'extract' && (
+                    <>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                        {uploadStep?.status !== 'completed'
+                          ? '请先完成上传'
+                          : extractStep?.status === 'running'
+                            ? '解析中，请稍候…'
+                            : extractStep?.status === 'completed' && extractText !== null
+                              ? `解析完成，共 ${extractText.length} 字。`
+                              : extractStep?.status === 'failed'
+                                ? '解析失败'
+                                : '待解析'}
+                      </Text>
+                      {extractStep?.status === 'failed' && extractStep.error_message && (
+                        <Alert
+                          type="error"
+                          message="解析失败"
+                          description={extractStep.error_message}
+                          showIcon
+                          style={{ marginTop: designTokens.marginSM }}
+                          action={
+                            <Button
+                              size="small"
+                              danger
+                              onClick={() => id && extractRunMutation.mutate(id)}
+                              loading={extractRunMutation.isPending}
                             >
-                              {extractText.slice(0, PREVIEW_LEN)}
-                              {extractText.length > PREVIEW_LEN ? '…' : ''}
-                            </Typography.Paragraph>
-                          ),
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-                {extractStep.status === 'failed' && extractStep.error_message && (
-                  <Alert
-                    type="error"
-                    message="解析失败"
-                    description={extractStep.error_message}
-                    showIcon
-                    style={{ marginTop: 8 }}
-                    action={
-                      <Button
-                        size="small"
-                        danger
-                        onClick={() => id && extractRunMutation.mutate(id)}
-                        loading={extractRunMutation.isPending}
-                      >
-                        重试
-                      </Button>
-                    }
-                  />
-                )}
-              </div>
-            )}
-
-            {extractStep?.status === 'completed' && (
-              <div style={{ marginBottom: 24 }}>
-                <Title level={5} style={{ marginBottom: 8 }}>
-                  步骤 2：分析
-                </Title>
-                {analyzeRunning && <Text>分析中，请稍候…</Text>}
-                {showAnalyzeTrigger && (
-                  <Button
-                    type="primary"
-                    loading={analyzeMutation.isPending}
-                    onClick={handleRunAnalyze}
-                  >
-                    开始分析
-                  </Button>
-                )}
-                {analyzeStep?.status === 'completed' && analyzeText !== null && (
-                  <>
-                    <Text strong>分析完成。</Text>
-                    <Collapse
-                      style={{ marginTop: 8 }}
-                      items={[
-                        {
-                          key: 'analyze',
-                          label: '分析结果',
-                          children: (
-                            <Typography.Paragraph
-                              style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}
-                              ellipsis={
-                                analyzeText.length > ANALYZE_PREVIEW_LEN
-                                  ? { rows: 8, expandable: true }
-                                  : false
-                              }
-                            >
-                              {analyzeText}
-                            </Typography.Paragraph>
-                          ),
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-                {analyzeStep?.status === 'failed' && analyzeStep.error_message && (
-                  <Alert
-                    type="error"
-                    message="分析失败"
-                    description={analyzeStep.error_message}
-                    showIcon
-                    style={{ marginTop: 8 }}
-                    action={
-                      <Button size="small" danger onClick={handleRunAnalyze}>
-                        重试
-                      </Button>
-                    }
-                  />
-                )}
-              </div>
-            )}
-
-            {analyzeStep?.status === 'completed' && (
-              <div style={{ marginBottom: 24 }}>
-                <Title level={5} style={{ marginBottom: 8 }}>
-                  步骤 3：参数提取
-                </Title>
-                {paramsRunning && <Text>参数提取中，请稍候…</Text>}
-                {showParamsTrigger && (
-                  <Button
-                    type="primary"
-                    loading={paramsMutation.isPending}
-                    onClick={handleRunParams}
-                  >
-                    开始参数提取
-                  </Button>
-                )}
-                {paramsStep?.status === 'completed' && paramsOutput && (
-                  <>
-                    <Text strong>参数提取完成。</Text>
-                    <Collapse
-                      style={{ marginTop: 8 }}
-                      items={[
-                        {
-                          key: 'project_info',
-                          label: '项目信息',
-                          children: (
-                            <Typography.Paragraph style={{ marginBottom: 0 }}>
-                              {Object.keys(paramsOutput.project_info || {}).length === 0
-                                ? '（无）'
-                                : Object.entries(paramsOutput.project_info || {}).map(([k, v]) => (
-                                    <span key={k} style={{ display: 'block', marginBottom: 4 }}>
-                                      <Text strong>{k}：</Text>
-                                      {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                                    </span>
-                                  ))}
-                            </Typography.Paragraph>
-                          ),
-                        },
-                        {
-                          key: 'bim_requirements',
-                          label: 'BIM 要求',
-                          children: (
-                            <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                              {(paramsOutput.bim_requirements || []).length === 0
-                                ? '（无）'
-                                : (paramsOutput.bim_requirements || []).map((item, i) => (
-                                    <li key={i}>{item}</li>
-                                  ))}
-                            </ul>
-                          ),
-                        },
-                        {
-                          key: 'risk_points',
-                          label: '风险点',
-                          children: (
-                            <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                              {(paramsOutput.risk_points || []).length === 0
-                                ? '（无）'
-                                : (paramsOutput.risk_points || []).map((item, i) => (
-                                    <li key={i}>{item}</li>
-                                  ))}
-                            </ul>
-                          ),
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-                {paramsStep?.status === 'failed' && paramsStep.error_message && (
-                  <Alert
-                    type="error"
-                    message="参数提取失败"
-                    description={paramsStep.error_message}
-                    showIcon
-                    style={{ marginTop: 8 }}
-                    action={
-                      <Button size="small" danger onClick={handleRunParams}>
-                        重试
-                      </Button>
-                    }
-                  />
-                )}
-              </div>
-            )}
-
-            {paramsStep?.status === 'completed' && (
-              <div style={{ marginBottom: 24 }}>
-                <Title level={5} style={{ marginBottom: 8 }}>
-                  步骤 4：框架生成
-                </Title>
-                {frameworkRunning && <Text>框架生成中，请稍候…</Text>}
-                {showFrameworkTrigger && (
-                  <Button
-                    type="primary"
-                    loading={frameworkMutation.isPending}
-                    onClick={handleRunFramework}
-                  >
-                    开始生成框架
-                  </Button>
-                )}
-                {frameworkStepDone && frameworkChapters.length > 0 && (
-                  <>
-                    <Text strong>
-                      {frameworkStep?.status === 'waiting_user'
-                        ? '框架已生成，等待您审核。'
-                        : '框架已确认，可进入按章生成。'}
-                    </Text>
-                    {frameworkStep?.status === 'completed' && frameworkExtraPoints.length > 0 && (
-                      <div style={{ marginTop: 8 }}>
-                        <Text type="secondary">已添加 {frameworkExtraPoints.length} 个要点：</Text>
+                              重试
+                            </Button>
+                          }
+                        />
+                      )}
+                      {extractStep?.status === 'completed' && extractText !== null && (
+                        <Collapse defaultActiveKey={[]} style={{ marginTop: designTokens.marginSM }} items={[{ key: 'preview', label: '预览', children: <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>{extractText.slice(0, PREVIEW_LEN)}{extractText.length > PREVIEW_LEN ? '…' : ''}</Typography.Paragraph> }]} />
+                      )}
+                    </>
+                  )}
+                  {stepKey === 'analyze' && (
+                    <>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                        {extractStep?.status !== 'completed'
+                          ? '请先完成解析'
+                          : analyzeRunning
+                            ? '分析中，请稍候…'
+                            : showAnalyzeTrigger
+                              ? '可开始分析'
+                              : analyzeStep?.status === 'completed'
+                                ? '分析完成。'
+                                : analyzeStep?.status === 'failed'
+                                  ? '分析失败'
+                                  : '待分析'}
+                      </Text>
+                      {showAnalyzeTrigger && (
+                        <Button type="primary" loading={analyzeMutation.isPending} onClick={handleRunAnalyze} style={{ marginBottom: designTokens.marginSM }}>
+                          开始分析
+                        </Button>
+                      )}
+                      {analyzeStep?.status === 'failed' && analyzeStep.error_message && (
+                        <Alert type="error" message="分析失败" description={analyzeStep.error_message} showIcon style={{ marginTop: designTokens.marginSM }} action={<Button size="small" danger onClick={handleRunAnalyze}>重试</Button>} />
+                      )}
+                      {analyzeStep?.status === 'completed' && analyzeText !== null && (
+                        <Collapse defaultActiveKey={[]} style={{ marginTop: designTokens.marginSM }} items={[{ key: 'analyze', label: '分析结果', children: <Typography.Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }} ellipsis={analyzeText.length > ANALYZE_PREVIEW_LEN ? { rows: 8, expandable: true } : false}>{analyzeText}</Typography.Paragraph> }]} />
+                      )}
+                    </>
+                  )}
+                  {stepKey === 'params' && (
+                    <>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                        {analyzeStep?.status !== 'completed'
+                          ? '请先完成分析'
+                          : paramsRunning
+                            ? '参数提取中，请稍候…'
+                            : showParamsTrigger
+                              ? '可开始参数提取'
+                              : paramsStep?.status === 'completed'
+                                ? '参数提取完成。'
+                                : paramsStep?.status === 'failed'
+                                  ? '参数提取失败'
+                                  : '待参数提取'}
+                      </Text>
+                      {showParamsTrigger && (
+                        <Button type="primary" loading={paramsMutation.isPending} onClick={handleRunParams} style={{ marginBottom: designTokens.marginSM }}>
+                          开始参数提取
+                        </Button>
+                      )}
+                      {paramsStep?.status === 'failed' && paramsStep.error_message && (
+                        <Alert type="error" message="参数提取失败" description={paramsStep.error_message} showIcon style={{ marginTop: designTokens.marginSM }} action={<Button size="small" danger onClick={handleRunParams}>重试</Button>} />
+                      )}
+                      {paramsStep?.status === 'completed' && paramsOutput && (
                         <Collapse
-                          style={{ marginTop: 4 }}
-                          size="small"
+                          defaultActiveKey={[]}
+                          style={{ marginTop: designTokens.marginSM }}
                           items={[
-                            {
-                              key: 'points',
-                              label: '查看要点',
-                              children: (
-                                <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                                  {frameworkExtraPoints.map((p, i) => (
-                                    <li key={i}>{p}</li>
-                                  ))}
-                                </ul>
-                              ),
-                            },
+                            { key: 'project_info', label: '项目信息', children: <Typography.Paragraph style={{ marginBottom: 0 }}>{Object.keys(paramsOutput.project_info || {}).length === 0 ? '（无）' : Object.entries(paramsOutput.project_info || {}).map(([k, v]) => <span key={k} style={{ display: 'block', marginBottom: 4 }}><Text strong>{k}：</Text>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>)}</Typography.Paragraph> },
+                            { key: 'bim_requirements', label: 'BIM 要求', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{(paramsOutput.bim_requirements || []).length === 0 ? '（无）' : (paramsOutput.bim_requirements || []).map((item, i) => <li key={i}>{item}</li>)}</ul> },
+                            { key: 'risk_points', label: '风险点', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{(paramsOutput.risk_points || []).length === 0 ? '（无）' : (paramsOutput.risk_points || []).map((item, i) => <li key={i}>{item}</li>)}</ul> },
                           ]}
                         />
-                      </div>
-                    )}
-                    {frameworkStep?.status === 'waiting_user' && (
-                      <div style={{ marginTop: 8, marginBottom: 8 }}>
-                        <Text type="secondary">
-                          请选择：接受并继续、重新生成或添加要点。
-                        </Text>
-                        <Button
-                          type="primary"
-                          style={{ marginLeft: 16 }}
-                          loading={acceptFrameworkMutation.isPending}
-                          onClick={handleAcceptAndContinue}
-                        >
-                          接受并继续
-                        </Button>
-                        <Button
-                          style={{ marginLeft: 8 }}
-                          loading={regenerateFrameworkMutation.isPending}
-                          onClick={handleRegenerateFramework}
-                        >
-                          重新生成框架
-                        </Button>
-                        <Button
-                          style={{ marginLeft: 8 }}
-                          loading={savePointsMutation.isPending}
-                          onClick={handleOpenAddPoints}
-                        >
-                          添加要点
-                        </Button>
-                        <Button style={{ marginLeft: 8 }} onClick={handleOpenFrameworkDiff}>
-                          查看框架对比
-                        </Button>
-                      </div>
-                    )}
-                    {frameworkStep?.status === 'completed' && (
-                      <div style={{ marginTop: 8, marginBottom: 8 }}>
-                        <Button size="small" onClick={handleOpenFrameworkDiff}>
-                          查看框架对比
-                        </Button>
-                      </div>
-                    )}
-                    <Collapse
-                      style={{ marginTop: 8 }}
-                      items={[
-                        {
-                          key: 'chapters',
-                          label: '章节框架',
-                          children: (
-                            <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                              {frameworkChapters.map((ch, i) => (
-                                <li key={i}>
-                                  <Text strong>第{ch.number}章</Text> {ch.title}
-                                </li>
-                              ))}
-                            </ul>
-                          ),
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-                {frameworkStepDone && frameworkChapters.length === 0 && (
-                  <Text type="secondary">框架已生成，但未解析到章节（可查看步骤列表）。</Text>
-                )}
-                {frameworkStep?.status === 'failed' && frameworkStep.error_message && (
-                  <Alert
-                    type="error"
-                    message="框架生成失败"
-                    description={frameworkStep.error_message}
-                    showIcon
-                    style={{ marginTop: 8 }}
-                    action={
-                      <Button size="small" danger onClick={handleRunFramework}>
-                        重试
-                      </Button>
-                    }
-                  />
-                )}
-              </div>
-            )}
+                      )}
+                    </>
+                  )}
 
-            {frameworkStep?.status === 'completed' && (
-              <div style={{ marginBottom: 24 }}>
-                <Title level={5} style={{ marginBottom: 8 }}>
-                  步骤 5：按章生成
-                </Title>
-                {chaptersRunning && (
-                  <div style={{ marginBottom: 8 }}>
-                    <Text>
-                      {chaptersCurrent > 0
-                        ? `正在生成第 ${chaptersCurrent} 章 / 共 ${chaptersTotal} 章…`
-                        : `正在生成…（共 ${chaptersTotal} 章）`}
-                    </Text>
-                    <Progress
-                      percent={chaptersTotal > 0 ? Math.round((Object.keys(chaptersContent).length / chaptersTotal) * 100) : 0}
-                      status="active"
-                      style={{ marginTop: 8, maxWidth: 400 }}
-                    />
-                  </div>
-                )}
-                {showChaptersTrigger && frameworkChapters.length > 0 && (
-                  <>
-                    <div style={{ marginBottom: 12 }}>
-                      <Text type="secondary">选择要生成的章节：</Text>
-                      <div style={{ marginTop: 8 }}>
-                        <Checkbox.Group
-                          value={selectedChapterNumbers}
-                          onChange={(vals) => setSelectedChapterNumbers(vals as number[])}
-                          options={frameworkChapters.map((ch) => ({
-                            label: `第${ch.number}章 ${ch.title}`,
-                            value: ch.number,
-                          }))}
-                        />
-                      </div>
-                      <div style={{ marginTop: 4 }}>
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={() => setSelectedChapterNumbers(frameworkChapters.map((ch) => ch.number))}
-                        >
-                          全选
+                  {stepKey === 'framework' && (
+                    <>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                        {paramsStep?.status !== 'completed'
+                          ? '请先完成参数提取'
+                          : frameworkRunning
+                            ? '框架生成中，请稍候…'
+                            : showFrameworkTrigger
+                              ? '可开始生成框架'
+                              : frameworkStep?.status === 'waiting_user'
+                                ? '框架已生成，等待您审核。'
+                                : frameworkStep?.status === 'completed'
+                                  ? '框架已确认，可进入按章生成。'
+                                  : frameworkStep?.status === 'failed'
+                                    ? '框架生成失败'
+                                    : '待生成框架'}
+                      </Text>
+                      {showFrameworkTrigger && (
+                        <Button type="primary" loading={frameworkMutation.isPending} onClick={handleRunFramework} style={{ marginBottom: designTokens.marginSM }}>
+                          开始生成框架
                         </Button>
-                        <Button
-                          type="link"
-                          size="small"
-                          onClick={() => setSelectedChapterNumbers([])}
-                        >
-                          取消全选
-                        </Button>
-                      </div>
-                    </div>
-                    <Button
-                      type="primary"
-                      loading={runChaptersMutation.isPending}
-                      onClick={handleRunChapters}
-                      disabled={selectedChapterNumbers.length === 0}
-                    >
-                      开始按章生成
-                    </Button>
-                  </>
-                )}
-                {chaptersStep?.status === 'completed' && (
-                  <>
-                    <Text strong>生成完成。</Text>
-                    <Button
-                      type="primary"
-                      icon={<DownloadOutlined />}
-                      onClick={handleDownloadDocx}
-                      loading={downloadLoading}
-                      style={{ marginLeft: 8 }}
-                    >
-                      下载 Word
-                    </Button>
-                    {Object.keys(chaptersContent).length > 0 && (
-                      <div style={{ marginTop: 8 }}>
-                        <Text type="secondary">已生成 {Object.keys(chaptersContent).length} 章，可展开预览：</Text>
+                      )}
+                      {frameworkStep?.status === 'waiting_user' && frameworkChapters.length > 0 && (
+                        <div style={{ marginBottom: designTokens.marginSM }}>
+                          <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginXS }}>请选择：接受并继续、重新生成或添加要点。</Text>
+                          <Button type="primary" style={{ marginRight: 8 }} loading={acceptFrameworkMutation.isPending} onClick={handleAcceptAndContinue}>接受并继续</Button>
+                          <Button style={{ marginRight: 8 }} loading={regenerateFrameworkMutation.isPending} onClick={handleRegenerateFramework}>重新生成框架</Button>
+                          <Button style={{ marginRight: 8 }} loading={savePointsMutation.isPending} onClick={handleOpenAddPoints}>添加要点</Button>
+                          <Button onClick={handleOpenFrameworkDiff}>查看框架对比</Button>
+                        </div>
+                      )}
+                      {frameworkStep?.status === 'completed' && frameworkChapters.length > 0 && (
+                        <div style={{ marginBottom: designTokens.marginSM }}>
+                          <Button size="small" onClick={handleOpenFrameworkDiff}>查看框架对比</Button>
+                        </div>
+                      )}
+                      {frameworkStep?.status === 'failed' && frameworkStep.error_message && (
+                        <Alert type="error" message="框架生成失败" description={frameworkStep.error_message} showIcon style={{ marginTop: designTokens.marginSM }} action={<Button size="small" danger onClick={handleRunFramework}>重试</Button>} />
+                      )}
+                      {frameworkStepDone && (
                         <Collapse
-                          style={{ marginTop: 8 }}
+                          defaultActiveKey={[]}
+                          style={{ marginTop: designTokens.marginSM }}
+                          items={[
+                            ...(frameworkChapters.length > 0 ? [{ key: 'chapters', label: '章节框架', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{frameworkChapters.map((ch, i) => <li key={i}><Text strong>第{ch.number}章</Text> {ch.title}</li>)}</ul> }] : []),
+                            ...(frameworkStep?.status === 'completed' && frameworkExtraPoints.length > 0 ? [{ key: 'points', label: '已添加要点', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{frameworkExtraPoints.map((p, i) => <li key={i}>{p}</li>)}</ul> }] : []),
+                          ]}
+                        />
+                      )}
+                      {frameworkStepDone && frameworkChapters.length === 0 && <Text type="secondary">框架已生成，但未解析到章节（可查看步骤列表）。</Text>}
+                    </>
+                  )}
+
+                  {stepKey === 'chapters' && (
+                    <>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                        {frameworkStep?.status !== 'completed'
+                          ? '请先确认框架（接受并继续）'
+                          : chaptersRunning
+                            ? (chaptersCurrent > 0 ? `正在生成第 ${chaptersCurrent} 章 / 共 ${chaptersTotal} 章…` : `正在生成…（共 ${chaptersTotal} 章）`)
+                            : showChaptersTrigger
+                              ? '选择章节后开始按章生成'
+                              : chaptersStep?.status === 'completed'
+                                ? '生成完成。'
+                                : chaptersStep?.status === 'failed'
+                                  ? '按章生成失败'
+                                  : '待按章生成'}
+                      </Text>
+                      {chaptersRunning && (
+                        <Progress percent={chaptersTotal > 0 ? Math.round((Object.keys(chaptersContent).length / chaptersTotal) * 100) : 0} status="active" style={{ marginBottom: designTokens.marginSM, maxWidth: 400 }} />
+                      )}
+                      {showChaptersTrigger && frameworkChapters.length > 0 && (
+                        <div style={{ marginBottom: designTokens.marginSM }}>
+                          <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginXS }}>选择要生成的章节：</Text>
+                          <Checkbox.Group value={selectedChapterNumbers} onChange={(vals) => setSelectedChapterNumbers(vals as number[])} options={frameworkChapters.map((ch) => ({ label: `第${ch.number}章 ${ch.title}`, value: ch.number }))} />
+                          <div style={{ marginTop: 4 }}>
+                            <Button type="link" size="small" onClick={() => setSelectedChapterNumbers(frameworkChapters.map((ch) => ch.number))}>全选</Button>
+                            <Button type="link" size="small" onClick={() => setSelectedChapterNumbers([])}>取消全选</Button>
+                          </div>
+                          <Button type="primary" loading={runChaptersMutation.isPending} onClick={handleRunChapters} disabled={selectedChapterNumbers.length === 0} style={{ marginTop: designTokens.marginSM }}>
+                            开始按章生成
+                          </Button>
+                        </div>
+                      )}
+                      {chaptersStep?.status === 'failed' && chaptersStep.error_message && (
+                        <Alert type="error" message="按章生成失败" description={chaptersStep.error_message} showIcon style={{ marginTop: designTokens.marginSM }} action={<Button size="small" danger onClick={handleRunChapters}>重试</Button>} />
+                      )}
+                      {chaptersStep?.status === 'completed' && Object.keys(chaptersContent).length > 0 && (
+                        <Collapse
+                          defaultActiveKey={[]}
                           size="small"
+                          style={{ marginTop: designTokens.marginSM }}
                           items={Object.keys(chaptersContent)
                             .sort((a, b) => parseInt(a, 10) - parseInt(b, 10))
                             .map((num) => {
@@ -1047,72 +896,35 @@ function TaskDetailPage() {
                                 children: (
                                   <div>
                                     <div style={{ marginBottom: 8 }}>
-                                      <Button
-                                        size="small"
-                                        style={{ marginRight: 8 }}
-                                        onClick={() => handleOpenChapterAddPoints(numInt)}
-                                      >
-                                        添加要点
-                                      </Button>
-                                      <Button
-                                        size="small"
-                                        style={{ marginRight: 8 }}
-                                        onClick={() => handleRegenerateChapter(numInt)}
-                                        loading={regenerateChapterMutation.isPending}
-                                      >
-                                        重新生成本章
-                                      </Button>
-                                      <Button
-                                        size="small"
-                                        onClick={() => handleOpenChapterDiff(numInt)}
-                                      >
-                                        查看本章对比
-                                      </Button>
-                                    {(chaptersPoints[num] || []).length > 0 && (
-                                      <Text type="secondary" style={{ marginLeft: 8 }}>
-                                        已添加 {(chaptersPoints[num] || []).length} 个要点
-                                      </Text>
-                                    )}
-                                  </div>
-                                    <pre
-                                      style={{
-                                        whiteSpace: 'pre-wrap',
-                                        maxHeight: 360,
-                                        overflow: 'auto',
-                                        marginBottom: 0,
-                                        padding: 12,
-                                        background: '#fafafa',
-                                        borderRadius: 4,
-                                        fontSize: 13,
-                                      }}
-                                    >
-                                      {chaptersContent[num]}
-                                    </pre>
+                                      <Button size="small" style={{ marginRight: 8 }} onClick={() => handleOpenChapterAddPoints(numInt)}>添加要点</Button>
+                                      <Button size="small" style={{ marginRight: 8 }} onClick={() => handleRegenerateChapter(numInt)} loading={regenerateChapterMutation.isPending}>重新生成本章</Button>
+                                      <Button size="small" onClick={() => handleOpenChapterDiff(numInt)}>查看本章对比</Button>
+                                      {(chaptersPoints[num] || []).length > 0 && <Text type="secondary" style={{ marginLeft: 8 }}>已添加 {(chaptersPoints[num] || []).length} 个要点</Text>}
+                                    </div>
+                                    <pre style={{ whiteSpace: 'pre-wrap', maxHeight: 360, overflow: 'auto', marginBottom: 0, padding: 12, background: '#fafafa', borderRadius: 4, fontSize: 13 }}>{chaptersContent[num]}</pre>
                                   </div>
                                 ),
                               }
                             })}
                         />
-                      </div>
-                    )}
-                  </>
-                )}
-                {chaptersStep?.status === 'failed' && chaptersStep.error_message && (
-                  <Alert
-                    type="error"
-                    message="按章生成失败"
-                    description={chaptersStep.error_message}
-                    showIcon
-                    style={{ marginTop: 8 }}
-                    action={
-                      <Button size="small" danger onClick={handleRunChapters}>
-                        重试
-                      </Button>
-                    }
-                  />
-                )}
-              </div>
-            )}
+                      )}
+                    </>
+                  )}
+                  {stepKey === 'export' && (
+                    <>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                        {chaptersStep?.status !== 'completed' ? '请先完成按章生成' : '生成完成，可下载 Word 文档。'}
+                      </Text>
+                      {chaptersStep?.status === 'completed' && (
+                        <Button type="primary" icon={<DownloadOutlined />} onClick={handleDownloadDocx} loading={downloadLoading}>
+                          下载 Word
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </Card>
+              )
+            })}
 
             <Title level={4} style={{ marginTop: 24 }}>
               步骤列表
@@ -1126,7 +938,6 @@ function TaskDetailPage() {
             />
           </>
         )}
-      </Content>
       <Modal
         title="添加要点 / 修改建议"
         open={addPointsModalOpen}
@@ -1235,7 +1046,7 @@ function TaskDetailPage() {
           </div>
         )}
       </Modal>
-    </Layout>
+    </>
   )
 }
 

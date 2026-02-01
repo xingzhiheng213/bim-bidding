@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { Button, Collapse, Input, Layout, message, Radio, Select, Typography } from 'antd'
+import { Button, Collapse, Input, message, Radio, Select, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import {
   getFrameworkDiff,
@@ -12,7 +11,6 @@ import { getTasks } from '../api/tasks'
 import { DiffView } from '../components/DiffView'
 import '../App.css'
 
-const { Header, Content } = Layout
 const { Title } = Typography
 const { TextArea } = Input
 
@@ -122,25 +120,10 @@ function ComparePage() {
   }
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Header style={{ padding: '0 24px', display: 'flex', alignItems: 'center' }}>
-        <Title level={4} style={{ color: '#fff', margin: 0 }}>
-          BIM 标书生成
-        </Title>
-        <Link to="/" style={{ color: '#fff', marginLeft: 24 }}>
-          首页
-        </Link>
-        <Link to="/settings" style={{ color: '#fff', marginLeft: 16 }}>
-          设置
-        </Link>
-        <Link to="/compare" style={{ color: '#fff', marginLeft: 16 }}>
-          对比
-        </Link>
-      </Header>
-      <Content style={{ padding: 24 }}>
-        <Title level={2} style={{ marginBottom: 16 }}>
-          文本对比（标红删除、标绿新增）
-        </Title>
+    <>
+      <Title level={2} style={{ marginBottom: 16 }}>
+        文本对比（标红删除、标绿新增）
+      </Title>
 
         {/* 从任务查看对比 */}
         <div style={{ marginBottom: 32 }}>
@@ -305,8 +288,7 @@ function ComparePage() {
             </div>
           )}
         </div>
-      </Content>
-    </Layout>
+    </>
   )
 }
 

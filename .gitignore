@@ -9,6 +9,7 @@ backend/__pycache__/
 
 # 敏感配置（不要提交 API Key、数据库密码等）
 backend/.env
+Docker/.env
 
 # 上传文件（按需：若不想把用户上传的 PDF 进仓库就保留下面这行）
 backend/data/uploads/

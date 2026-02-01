@@ -1,0 +1,9 @@
+# 避免把本机敏感配置打进镜像（API Key、数据库密码等）
+backend/.env
+Docker/.env
+
+# 虚拟环境与缓存（构建不需要）
+backend/.venv/
+backend/__pycache__/
+frontend/node_modules/
+frontend/dist/
