@@ -91,13 +91,3 @@ docker compose up -d --build
 ├── UI设计计划-分阶段.md
 └── README-backend.md # 后端说明
 ```
-
----
-
-## 文档与指南
-
-- [README-backend.md](README-backend.md) — 后端环境与本地运行
-- [frontend/README.md](frontend/README.md) — 前端环境与运行
-- [Docker/README.md](Docker/README.md) — Docker 一键运行
-- [开发计划-分阶段.md](开发计划-分阶段.md) — 功能阶段与验收
-- [各阶段指导/](各阶段指导/) — 开发前启动顺序、办公数据库迁移、Git 推送、各阶段操作与验证
