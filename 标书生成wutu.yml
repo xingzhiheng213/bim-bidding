@@ -1,0 +1,1701 @@
+app:
+  description: BIM技术标生成系统-步骤10d-优化版（评分导向+深度分层+图表指导）
+  icon: 🤖
+  icon_background: '#2E5BFF'
+  mode: advanced-chat
+  name: 标书生成wutu
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/deepseek:0.0.9@8cc65e3d2ce11b03d377ee008dc699c7016601c2646a09c983fcf7c1fd7827ee
+    version: null
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/zhipuai:0.0.23@7e6213a06c26b17b5dfc2416db36f664d4fb08252bd1644ca54a82a6cc7a8609
+    version: null
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: stvlynn/doc:0.0.1@900d82963e63c505136dfc77f3e06329326e714ca66bed668224e811f73efc7b
+    version: null
+kind: app
+version: 0.5.0
+workflow:
+  conversation_variables: []
+  environment_variables:
+  - description: 文档检索API密钥
+    id: 3b6e6b6c-5f71-4f0c-9a1d-8b18f4f2a1d1
+    name: DOC_API_KEY
+    selector:
+    - env
+    - DOC_API_KEY
+    value: td-16fcb76cb83ef567311d3fcecbd198088f2144adde306c2a
+    value_type: secret
+  - description: 图片知识库ID
+    id: 7f0a9e1f-2a0b-4f3f-9a5c-22e0b7e6f1d2
+    name: IMG_KB_ID
+    selector:
+    - env
+    - IMG_KB_ID
+    value: 6971f88cf7f898efad71e92d
+    value_type: string
+  - description: 图片知识库API密钥
+    id: 4c5d2f6a-98f7-4c5a-9b7b-6d1c3b2a1f9e
+    name: IMG_KB_API_KEY
+    selector:
+    - env
+    - IMG_KB_API_KEY
+    value: td-16fcb76cb83ef567311d3fcecbd198088f2144adde306c2a
+    value_type: secret
+  features:
+    file_upload:
+      allowed_file_extensions:
+      - .pdf
+      - .doc
+      - .docx
+      allowed_file_types:
+      - document
+      allowed_file_upload_methods:
+      - local_file
+      enabled: true
+      fileUploadConfig:
+        attachment_image_file_size_limit: 2
+        audio_file_size_limit: 50
+        batch_count_limit: 5
+        file_size_limit: 15
+        file_upload_limit: 20
+        image_file_batch_limit: 10
+        image_file_size_limit: 10
+        single_chunk_attachment_limit: 10
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 10
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods:
+        - local_file
+        - remote_url
+      number_limits: 1
+    opening_statement: 欢迎使用BIM技术标生成系统！请上传招标文件。
+    retriever_resource:
+      enabled: true
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInLoop: false
+        sourceType: start
+        targetType: document-extractor
+      id: start-doc-extractor
+      selected: false
+      source: '1768789747826'
+      sourceHandle: source
+      target: doc_extractor
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: code
+        targetType: code
+      id: chapter-parser-filter
+      selected: false
+      source: chapter_parser
+      sourceHandle: source
+      target: '1768800006'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: code
+        targetType: iteration
+      id: chapter-filter-iteration
+      selected: false
+      source: '1768800006'
+      sourceHandle: source
+      target: '1768800001'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: iteration
+        targetType: template-transform
+      id: iteration-template
+      selected: false
+      source: '1768800001'
+      sourceHandle: source
+      target: template_aggregator
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: code
+        targetType: template-transform
+      id: project_info_formatter-source-template_aggregator-target
+      selected: false
+      source: project_info_formatter
+      sourceHandle: source
+      target: template_aggregator
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        sourceType: iteration-start
+        targetType: answer
+      id: 1768800001start-source-1769067954039-target
+      selected: false
+      source: 1768800001start
+      sourceHandle: source
+      target: '1769067954039'
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: parameter-extractor
+      id: llm-source-param_extractor-target
+      selected: false
+      source: llm
+      sourceHandle: source
+      target: param_extractor
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: document-extractor
+        targetType: llm
+      id: doc_extractor-source-llm-target
+      selected: false
+      source: doc_extractor
+      sourceHandle: source
+      target: llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: llm
+        targetType: code
+      id: framework_llm-source-chapter_parser-target
+      selected: false
+      source: framework_llm
+      sourceHandle: source
+      target: chapter_parser
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: parameter-extractor
+        targetType: code
+      id: param_extractor-source-project_info_formatter-target
+      selected: false
+      source: param_extractor
+      sourceHandle: source
+      target: project_info_formatter
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: parameter-extractor
+        targetType: http-request
+      id: param_extractor-source-1769096835976-target
+      selected: false
+      source: param_extractor
+      sourceHandle: source
+      target: '1769096835976'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: http-request
+        targetType: llm
+      id: 1769096835976-source-framework_llm-target
+      selected: false
+      source: '1769096835976'
+      sourceHandle: source
+      target: framework_llm
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        sourceType: http-request
+        targetType: llm
+      id: 1769096982420-source-1768800003-target
+      selected: false
+      source: '1769096982420'
+      sourceHandle: source
+      target: '1768800003'
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+    - data:
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        sourceType: llm
+        targetType: code
+      id: 1768800005-source-1768800007-target
+      selected: false
+      source: '1768800005'
+      sourceHandle: source
+      target: '1768800007'
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+    - data:
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        sourceType: llm
+        targetType: http-request
+      id: 1768800003-source-1769097138681-target
+      selected: false
+      source: '1768800003'
+      sourceHandle: source
+      target: '1769097138681'
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+    - data:
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        sourceType: http-request
+        targetType: llm
+      id: 1769097138681-source-1768800005-target
+      selected: false
+      source: '1769097138681'
+      sourceHandle: source
+      target: '1768800005'
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+    - data:
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        sourceType: answer
+        targetType: http-request
+      id: 1769067954039-source-1769096982420-target
+      selected: false
+      source: '1769067954039'
+      sourceHandle: source
+      target: '1769096982420'
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+    - data:
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        sourceType: code
+        targetType: code
+      id: 1768800007-source-1769583527062-target
+      source: '1768800007'
+      sourceHandle: source
+      target: '1769583527062'
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+    - data:
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        sourceType: code
+        targetType: code
+      id: 1769583527062-source-1769585258856-target
+      source: '1769583527062'
+      sourceHandle: source
+      target: '1769585258856'
+      targetHandle: target
+      type: custom
+      zIndex: 1002
+    - data:
+        isInLoop: false
+        sourceType: template-transform
+        targetType: tool
+      id: template_aggregator-source-1769672667122-target
+      source: template_aggregator
+      sourceHandle: source
+      target: '1769672667122'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInLoop: false
+        sourceType: tool
+        targetType: answer
+      id: 1769672667122-source-answer-target
+      source: '1769672667122'
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        selected: false
+        title: 用户输入
+        type: start
+        variables:
+        - allowed_file_extensions:
+          - .pdf
+          - .doc
+          - .docx
+          allowed_file_types:
+          - document
+          allowed_file_upload_methods:
+          - local_file
+          default: ''
+          hint: 请上传招标文件
+          label: 招标文件
+          max_length: 100
+          options: []
+          required: true
+          type: file
+          variable: tender_file
+        - default: ''
+          hint: 留空生成第1章，输入数字生成指定章节（如2、3...），输入all生成所有章节
+          label: 生成章节
+          max_length: 10
+          options: []
+          required: false
+          type: text-input
+          variable: chapter_to_generate
+      height: 135
+      id: '1768789747826'
+      position:
+        x: 0
+        y: 93
+      positionAbsolute:
+        x: 0
+        y: 93
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        is_array_file: false
+        selected: false
+        title: 文档提取器
+        type: document-extractor
+        variable_selector:
+        - '1768789747826'
+        - tender_file
+      height: 104
+      id: doc_extractor
+      position:
+        x: 342
+        y: 109
+      positionAbsolute:
+        x: 342
+        y: 109
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - doc_extractor
+          - text
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+            size: 10
+        model:
+          completion_params:
+            temperature: 0.2
+          mode: chat
+          name: glm-4-long
+          provider: langgenius/zhipuai/zhipuai
+        prompt_template:
+        - id: 1c7882ac-3318-4af3-ad3c-ba06dd167acb
+          role: system
+          text: '# BIM技术标招标文件深度分析专家
+
+
+            你是一位资深的招投标专家，专门负责深度分析BIM技术标招标文件。你的任务是全面、细致地提取招标文件中的关键信息。
+
+
+            ## 分析维度
+
+
+            ### 1. 项目基本信息
+
+            - 项目名称、规模、地点
+
+            - 项目性质（新建/改扩建/装修等）
+
+            - 建设单位及联系方式
+
+            - 项目预算范围
+
+
+            ### 2. BIM技术要求（核心重点）
+
+            - BIM建模深度要求（LOD级别：100/200/300/350/400/500）
+
+            - BIM软件要求（Revit/ArchiCAD/Bentley等及版本）
+
+            - BIM应用范围（建筑/结构/机电/景观/装饰等）
+
+            - BIM应用阶段（设计/施工/运维）
+
+            - BIM交付成果要求（模型格式、文档、报告等）
+
+            - BIM协同平台要求（是否需要、具体平台）
+
+            - BIM应用场景（碰撞检测/进度模拟/成本管控/质量管理等）
+
+
+            ### 3. 技术标格式要求
+
+            - 文档结构要求（章节编号、页码、字体字号）
+
+            - 装订要求（胶装/线装/活页）
+
+            - 份数要求（正本/副本）
+
+            - 签字盖章要求（位置、人员、公章类型）
+
+            - 特殊格式要求（封面模板、目录格式等）
+
+
+            ### 4. 技术评分细则（关键）
+
+            - 总分值及各项权重
+
+            - BIM相关评分项及分值
+
+            - 每项的具体评分标准
+
+            - 加分项和扣分项
+
+
+            ### 5. 资质与业绩要求
+
+            - 企业资质要求（BIM咨询/设计/施工资质）
+
+            - 人员资质要求（BIM工程师证书、项目经理资质）
+
+            - 业绩要求（类似项目数量、规模、时间范围）
+
+            - 设备要求（硬件配置、软件正版证明）
+
+
+            ### 6. 废标条款与风险点（重要）
+
+            - 明确的废标条件
+
+            - 实质性响应条款
+
+            - 容易遗漏的细节要求
+
+            - 高风险扣分项
+
+
+            ### 7. 时间节点要求
+
+            - 投标截止时间
+
+            - 项目工期要求
+
+            - 关键里程碑节点
+
+            - BIM成果提交时间表
+
+
+            ## 输出要求
+
+
+            请按照上述7个维度，逐条、详细地提取招标文件中的信息。
+
+
+            - 对于明确的数值、标准、要求，请直接引用原文
+
+            - 对于模糊或隐含的要求，请标注"需重点关注"
+
+            - 对于缺失但通常重要的信息，请标注"文件中未明确"
+
+            - 特别标注所有带"必须""应当""不得"等强制性词汇的条款
+
+
+            务必保持客观、准确、全面，不遗漏任何可能影响投标的细节。
+
+            '
+        - id: 9d1f34ab-09f7-4c68-9cfd-2c30549e2552
+          role: user
+          text: '请深度分析以下招标文件，按照系统提示的7个维度进行全面提取：
+
+
+            {{#context#}}
+
+
+            请确保：
+
+            1. 所有BIM相关要求都被提取
+
+            2. 所有评分细则都被记录
+
+            3. 所有废标风险点都被标注
+
+            4. 所有格式要求都被说明
+
+            '
+        selected: false
+        title: 深度分析招标文件
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: llm
+      position:
+        x: 684
+        y: 117
+      positionAbsolute:
+        x: 684
+        y: 117
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        instruction: '从招标文件分析结果中提取结构化信息，形成以下参数：
+
+
+          1. project_info: 项目基本信息（JSON格式字符串，包含name、scale、location等字段）
+
+          2. bim_requirements: BIM技术要求清单（字符串数组）
+
+          3. risk_points: 废标风险点（字符串数组）
+
+
+          请确保提取的信息准确、完整。
+
+          '
+        model:
+          completion_params:
+            temperature: 0.1
+          mode: chat
+          name: deepseek-chat
+          provider: langgenius/deepseek/deepseek
+        parameters:
+        - description: 项目基本信息（JSON格式字符串，包含名称、规模、地点等）
+          name: project_info
+          required: true
+          type: string
+        - description: BIM技术要求列表
+          name: bim_requirements
+          required: true
+          type: array[string]
+        - description: 废标风险点列表
+          name: risk_points
+          required: true
+          type: array[string]
+        query:
+        - llm
+        - text
+        reasoning_mode: prompt
+        selected: false
+        title: 参数提取器
+        type: parameter-extractor
+        vision:
+          enabled: false
+      height: 88
+      id: param_extractor
+      position:
+        x: 1026
+        y: 117
+      positionAbsolute:
+        x: 1026
+        y: 117
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "import json\n\n\ndef _stringify(value: object) -> str:\n    if value\
+          \ is None:\n        return \"\"\n    if isinstance(value, (dict, list)):\n\
+          \        return json.dumps(value, ensure_ascii=False, indent=2)\n    return\
+          \ str(value)\n\n\ndef main(project_info: str) -> dict:\n    \"\"\"\n   \
+          \ 将project_info JSON字符串转换为可读Markdown。\n    如果解析失败，则按原样输出。\n    \"\"\"\n\
+          \    try:\n        parsed = json.loads(project_info) if project_info else\
+          \ {}\n    except json.JSONDecodeError:\n        return {\"project_info_md\"\
+          : _stringify(project_info)}\n\n    if not isinstance(parsed, dict):\n  \
+          \      return {\"project_info_md\": _stringify(parsed)}\n\n    key_map =\
+          \ {\n        \"name\": \"项目名称\",\n        \"scale\": \"项目规模\",\n       \
+          \ \"location\": \"项目地点\",\n        \"nature\": \"项目性质\",\n        \"construction_unit\"\
+          : \"建设单位\",\n        \"contact\": \"联系方式\",\n        \"budget_range\": \"\
+          预算范围\",\n    }\n\n    lines = []\n    for key, value in parsed.items():\n\
+          \        display_key = key_map.get(key, key)\n        lines.append(f\"-\
+          \ {display_key}: {_stringify(value)}\")\n\n    return {\"project_info_md\"\
+          : \"\\n\".join(lines) if lines else \"\"}\n"
+        code_language: python3
+        outputs:
+          project_info_md:
+            type: string
+        selected: false
+        title: 项目信息格式化
+        type: code
+        variables:
+        - value_selector:
+          - param_extractor
+          - project_info
+          variable: project_info
+      height: 52
+      id: project_info_formatter
+      position:
+        x: 2418.3754157722915
+        y: -10.446606759553475
+      positionAbsolute:
+        x: 2418.3754157722915
+        y: -10.446606759553475
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - '1769096835976'
+          - body
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+        model:
+          completion_params:
+            temperature: 0.4
+          mode: chat
+          name: deepseek-chat
+          provider: langgenius/deepseek/deepseek
+        prompt_template:
+        - id: aa1a6a43-11c6-4708-9f91-00bf8725a743
+          role: system
+          text: '你是BIM技术标框架设计专家。根据招标文件要求和知识库参考，生成投标文档的章节框架。
+
+
+            输出格式要求：
+
+            每一章节必须按照以下格式输出，每行一个章节：
+
+            第1章 项目理解与分析
+
+            第2章 BIM技术实施方案
+
+            第3章 BIM技术应用计划
+
+            ...
+
+
+            注意：必须使用"第X章"格式，章节标题简洁明确。
+
+            '
+        - id: e5545744-e188-4ed2-84e0-2ea214ce1be6
+          role: user
+          text: '请根据以下信息生成BIM技术标框架：
+
+
+            招标分析：{{#llm.text#}}
+
+            BIM要求：{{#param_extractor.bim_requirements#}}
+
+            知识库参考：{{#context#}}
+
+            '
+        selected: false
+        title: 生成文档框架
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: framework_llm
+      position:
+        x: 1730
+        y: 132
+      positionAbsolute:
+        x: 1730
+        y: 132
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "import re\nimport json\n\ndef main(framework_text: str) -> dict:\n\
+          \    \"\"\"\n    解析框架文本，提取章节列表\n    输入格式示例：\n    第1章 项目理解与分析\n    第2章 BIM技术实施方案\n\
+          \    \"\"\"\n\n    # 使用正则提取所有章节\n    pattern = r'第(\\d+)章\\s+(.+?)(?=\\\
+          n|$)'\n    matches = re.findall(pattern, framework_text, re.MULTILINE)\n\
+          \n    chapters = []\n    for chapter_num, chapter_title in matches:\n  \
+          \      chapters.append({\n            \"number\": int(chapter_num),\n  \
+          \          \"title\": chapter_title.strip(),\n            \"full_name\"\
+          : f\"第{chapter_num}章 {chapter_title.strip()}\"\n        })\n\n    return\
+          \ {\n        \"result\": chapters,\n        \"count\": len(chapters)\n \
+          \   }\n"
+        code_language: python3
+        outputs:
+          count:
+            type: number
+          result:
+            type: array[object]
+        selected: false
+        title: 章节解析器
+        type: code
+        variables:
+        - value_selector:
+          - framework_llm
+          - text
+          variable: framework_text
+      height: 52
+      id: chapter_parser
+      position:
+        x: 2072
+        y: 150
+      positionAbsolute:
+        x: 2072
+        y: 150
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "def main(chapters: list, chapter_to_generate: str) -> dict:\n    \"\
+          \"\"\n根据用户输入过滤要生成的章节\n    \n    Args:\n        chapters: 章节列表\n        chapter_to_generate:\
+          \ 要生成的章节（留空/all=全部，数字=指定章节）\n    \n    Returns:\n        过滤后的章节列表和提示信息\n\
+          \"\"\"\n    if not chapter_to_generate or chapter_to_generate.strip() ==\
+          \ \"\":\n        # 默认只生成第一章\n        if len(chapters) > 0:\n           \
+          \ result = [chapters[0]]\n            message = f\"\\n\\n--- 提示 ---\\n共\
+          \ {len(chapters)} 个章节，当前已生成第1章。\\n如需继续生成第2章，请输入 chapter_to_generate=2\\\
+          n如需生成所有章节，请输入 chapter_to_generate=all\"\n            return {\n        \
+          \        \"filtered_chapters\": result,\n                \"hint_message\"\
+          : message\n            }\n    \n    target = chapter_to_generate.strip().lower()\n\
+          \    \n    if target == \"all\":\n        # 生成所有章节\n        message = f\"\
+          \\n\\n--- 提示 ---\\n正在生成全部 {len(chapters)} 个章节...\"\n        return {\n \
+          \           \"filtered_chapters\": chapters,\n            \"hint_message\"\
+          : message\n        }\n    \n    # 尝试解析为数字\n    try:\n        idx = int(target)\
+          \ - 1  # 转换为0-based索引\n        if 0 <= idx < len(chapters):\n          \
+          \  result = [chapters[idx]]\n            chapter_name = chapters[idx]['full_name']\n\
+          \            message = f\"\\n\\n--- 提示 ---\\n正在生成：{chapter_name}\\n如需生成下一章，请输入\
+          \ chapter_to_generate={idx + 2}\\n如需生成所有章节，请输入 chapter_to_generate=all\"\
+          \n            return {\n                \"filtered_chapters\": result,\n\
+          \                \"hint_message\": message\n            }\n        else:\n\
+          \            # 索引超出范围，返回所有章节\n            message = f\"\\n\\n--- 警告 ---\\\
+          n章节号超出范围（1-{len(chapters)}），将生成所有章节\"\n            return {\n          \
+          \      \"filtered_chapters\": chapters,\n                \"hint_message\"\
+          : message\n            }\n    except ValueError:\n        # 无法解析为数字，返回所有章节\n\
+          \        message = f\"\\n\\n--- 警告 ---\\n无法解析章节号，将生成所有章节\"\n        return\
+          \ {\n            \"filtered_chapters\": chapters,\n            \"hint_message\"\
+          : message\n        }\n"
+        code_language: python3
+        outputs:
+          filtered_chapters:
+            type: array[object]
+          hint_message:
+            type: string
+        selected: false
+        title: 章节过滤器
+        type: code
+        variables:
+        - value_selector:
+          - chapter_parser
+          - result
+          variable: chapters
+        - value_selector:
+          - '1768789747826'
+          - chapter_to_generate
+          variable: chapter_to_generate
+      height: 52
+      id: '1768800006'
+      position:
+        x: 2414
+        y: 150
+      positionAbsolute:
+        x: 2414
+        y: 150
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        error_handle_mode: continue-on-error
+        flatten_output: false
+        height: 290
+        is_parallel: true
+        iterator_input_type: array[object]
+        iterator_selector:
+        - '1768800006'
+        - filtered_chapters
+        output_selector:
+        - '1768800005'
+        - text
+        output_type: array[string]
+        parallel_nums: 5
+        selected: false
+        start_node_id: 1768800001start
+        title: 章节内容生成
+        type: iteration
+        width: 3706
+      height: 290
+      id: '1768800001'
+      position:
+        x: 2752.7766966202225
+        y: 175.5113935071564
+      positionAbsolute:
+        x: 2752.7766966202225
+        y: 175.5113935071564
+      selected: true
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 3706
+      zIndex: 1
+    - data:
+        desc: ''
+        isInIteration: true
+        selected: false
+        title: ''
+        type: iteration-start
+      draggable: false
+      height: 48
+      id: 1768800001start
+      parentId: '1768800001'
+      position:
+        x: 60
+        y: 120
+      positionAbsolute:
+        x: 2812.7766966202225
+        y: 295.5113935071564
+      selectable: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom-iteration-start
+      width: 44
+      zIndex: 1002
+    - data:
+        authorization:
+          config:
+            api_key: '{{#env.DOC_API_KEY#}}'
+            type: bearer
+          type: api-key
+        body:
+          data:
+          - id: key-value-484
+            key: ''
+            type: text
+            value: "{\n  \"query\": \"{{#1768800001.item.full_name#}}\",\n  \"kb_ids\"\
+              : [\n    \"69725828f7f898efad71e93c\"\n  ],\n  \"retrieval_setting\"\
+              : {\n    \"top_k\": 3,\n    \"score_threshold\": 0.6\n  }\n}"
+          type: json
+        headers: ''
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        ssl_verify: true
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: HTTP 检索2
+        type: http-request
+        url: https://doc.bluedigit.ai/api/retrieve
+        variables: []
+      height: 138
+      id: '1769096982420'
+      parentId: '1768800001'
+      position:
+        x: 506
+        y: 75
+      positionAbsolute:
+        x: 3258.7766966202225
+        y: 250.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 1002
+    - data:
+        code: "import time\n\n\ndef main(text: str) -> dict:\n    \"\"\"\n    Sleep\
+          \ to throttle iteration and return the text unchanged.\n    \"\"\"\n   \
+          \ time.sleep(10)\n    return {\"text\": text}\n"
+        code_language: python3
+        outputs:
+          text:
+            type: string
+        retry_config:
+          max_retries: 10
+          retry_enabled: false
+          retry_interval: 5000
+        selected: false
+        title: 迭代延时
+        type: code
+        variables:
+        - value_selector:
+          - '1768800005'
+          - text
+          variable: text
+      height: 52
+      id: '1768800007'
+      parentId: '1768800001'
+      position:
+        x: 1794
+        y: 118
+      positionAbsolute:
+        x: 4546.7766966202225
+        y: 293.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 1002
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - '1769096982420'
+          - body
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+        model:
+          completion_params:
+            temperature: 0.1
+          mode: chat
+          name: deepseek-chat
+          provider: langgenius/deepseek/deepseek
+        prompt_template:
+        - id: b7aea52b-2589-4da9-a47e-dcf67d61e15f
+          role: system
+          text: '你是BIM技术标章节结构设计专家，负责为每个章节设计详细的小节大纲。
+
+
+            ## 核心原则：评分导向设计
+
+
+            **最高优先级**：每个小节的设计必须对应招标文件中的评分项和技术要求。
+
+
+            ### 设计流程
+
+            1. 分析招标要求中提到的评分细则
+
+            2. 识别该章节对应的评分项（BIM建模深度、协同平台、应用范围等）
+
+            3. 设计小节时确保每个评分项都有明确响应
+
+            4. 小节标题应直接体现评分项关键词
+
+
+            ## 章节类型与拆分建议
+
+
+            根据章节特点灵活拆分，**不要拘泥于固定数量**，由内容决定小节数量。
+
+
+            ### 设计应用类章节（包含"设计"、"应用"、"实施"等关键词）
+
+            根据专业领域和应用场景自然拆分，通常4-6个小节。
+
+            参考方向：土建/建筑BIM设计、机电BIM设计、管线综合与碰撞检测、设计优化、交付标准与成果等。
+
+            **注意**：不要为了凑数量而拆分，如果某些内容可以合并就合并。
+
+
+            ### 技术方案类章节
+
+            根据技术环节和管理要素自然拆分，通常3-5个小节。
+
+            参考方向：技术方案概述、具体技术措施、实施流程、质量保证、风险管控等。
+
+
+            ### 管理保障类章节
+
+            精炼为主，通常2-4个小节。
+
+            参考方向：组织架构、计划安排、实施措施、保障机制等。
+
+
+            ### 简单章节（项目理解、概述等）
+
+            简洁明了，通常2-3个小节。
+
+
+            ## 输出格式要求
+
+
+            每行一个小节，使用统一格式：
+
+            X.1 小节标题1
+
+            X.2 小节标题2
+
+            X.3 小节标题3
+
+            ...
+
+
+            注意：
+
+            - **必须使用"X.1"格式**，保持投标书全篇统一
+
+            - X代表当前章节号
+
+            - 小节标题简洁明确（5-10字）
+
+            - 小节标题应包含评分项关键词（如"LOD深度"、"协同平台"、"碰撞检测"等）
+
+            - 小节之间逻辑连贯
+
+            - 覆盖章节的所有关键评分项
+
+            - **小节数量由内容决定，而非机械规定**
+
+            '
+        - id: 51734d70-db60-4ff1-b2e5-94ee8b788784
+          role: user
+          text: '请为以下章节生成小节大纲：
+
+
+            **章节：** {{#1768800001.item.full_name#}}
+
+
+            **招标要求参考：**
+
+            {{#llm.text#}}
+
+
+            **BIM技术要求：**
+
+            {{#param_extractor.bim_requirements#}}
+
+
+            **知识库参考：**
+
+            {{#context#}}
+
+
+            请输出该章节的小节列表，严格按照"X.1 标题"格式。
+
+            '
+        selected: false
+        title: 生成小节大纲
+        type: llm
+        vision:
+          enabled: false
+      height: 88
+      id: '1768800003'
+      parentId: '1768800001'
+      position:
+        x: 828
+        y: 100
+      positionAbsolute:
+        x: 3580.7766966202225
+        y: 275.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 1002
+    - data:
+        authorization:
+          config:
+            api_key: '{{#env.DOC_API_KEY#}}'
+            type: bearer
+          type: api-key
+        body:
+          data:
+          - id: key-value-659
+            key: ''
+            type: text
+            value: "{\n  \"query\": \"{{#1768800003.text#}}\",\n  \"kb_ids\": [\n\
+              \    \"69725828f7f898efad71e93c\"\n  ],\n  \"retrieval_setting\": {\n\
+              \    \"top_k\": 3,\n    \"score_threshold\": 0.7\n  }\n}"
+          type: json
+        headers: ''
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        ssl_verify: true
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: HTTP 检索3
+        type: http-request
+        url: https://doc.bluedigit.ai/api/retrieve
+        variables: []
+      height: 138
+      id: '1769097138681'
+      parentId: '1768800001'
+      position:
+        x: 1150
+        y: 75
+      positionAbsolute:
+        x: 3902.7766966202225
+        y: 250.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 1002
+    - data:
+        context:
+          enabled: true
+          variable_selector:
+          - '1769097138681'
+          - body
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        memory:
+          query_prompt_template: ''
+          role_prefix:
+            assistant: ''
+            user: ''
+          window:
+            enabled: false
+        model:
+          completion_params:
+            temperature: 0.45
+          mode: chat
+          name: glm-4-plus
+          provider: langgenius/zhipuai/zhipuai
+        prompt_template:
+        - id: 0cd7563d-19a6-48b4-9b31-ffc33dac550d
+          role: system
+          text: "你是BIM技术标章节撰写专家，负责根据小节大纲撰写该章节的完整内容。\n\n## 核心原则：评分导向撰写\n\n**最高优先级**：每个小节必须明确响应招标文件中的评分项和技术要求。\n\
+            \n### 撰写流程\n1. 识别当前章节对应的评分项（从招标要求和BIM技术要求中提取）\n2. 每个小节开头用括号标注响应的具体要求或评分标准（作为提示性内容，非正文）\n\
+            3. 内容组织围绕评分项展开，确保评标专家能快速找到评分依据\n4. 使用招标文件中的关键词和术语，确保评分对应性\n\n## 技术深度分层要求\n\
+            \n根据章节性质采用不同的详细程度：\n\n### 核心技术章节（关键词：BIM、实施、技术方案、应用、设计）\n- 字数参考：每小节 **2000-3000字**（弹性范围）\n\
+            - 内容要点：\n  * 开篇自然引出技术目标和方案\n  * 中间详细展开：技术原理、实施方案、关键措施等\n  * 结尾总结关键技术优势\n\
+            - 必须包含：技术路线说明、关键技术措施、质量控制要点\n- 建议图表：【图X-X：技术实施流程图】、【图X-X：技术架构图】\n\n###\
+            \ 管理保障章节（关键词：组织、管理、保障、计划、团队）\n- 字数参考：每小节 **1200-1800字**\n- 内容要点：\n  *\
+            \ 开篇说明管理目标和体系架构\n  * 中间展开：组织结构、职责分工、管理制度\n  * 结尾强调保障措施的有效性\n- 必须包含：组织结构、职责分工、保障措施\n\
+            - 建议图表：【图X-X：组织架构图】、【图X-X：时间计划表】\n\n### 项目理解章节（关键词：理解、分析、概述）\n- 字数参考：每小节\
+            \ **800-1200字**\n- 内容要点：\n  * 项目特点分析\n  * 重难点识别\n  * 对策建议\n- 重点：精准分析，避免冗长\n\
+            - 建议图表：【图X-X：项目关键要素分析图】\n\n## 图表生成指导（应用优先，按内容自判）\n\n图表占位符用于提升专业性，但不要求固定数量。必须根据小节主题与评分点决定图表类型，避免为了“看起来专业”而堆流程图/架构图。\n\
+            \n### 密度与收束规则\n- 应用/优化/模拟/校核类小节可适度多图\n- 管理与组织类小节少量图表即可，必要时用表格替代\n- 只选择与当前评分点强相关的2-3类图示，避免泛滥\n\
+            - 图表占位符格式：【图：图表主题关键词】（用于检索图片，例如：机电管线优化示意图）\n- 图表位置：在相关文字描述后自然插入\n\n###\
+            \ 选图逻辑（先判断“成果”，再判断“流程”）\n1. 优先使用“成果型图示”：模型成果、分析结果、优化对比、示意图\n2. 只有当小节主题是“流程/协同/平台/管理机制”时，才使用流程图或架构图\n\
+            3. 若小节讲的是某一专项应用（如机电优化、净高校核），图表应直接表现该专项成果\n\n### 图表类型清单（按主题择优选用）\n- 模型成果类：建筑模型图、结构模型图、机电管线综合模型图、土建/机电拆分模型图、关键部位节点模型图、整合BIM模型总览图\n\
+            - 应用/分析成果类：气流组织分析图、日照/采光分析图、能耗/热工分析图、噪声/舒适度分析图、人员疏散模拟图\n- 优化与校核成果类：净高分析图、留洞优化图、碰撞检查问题分布图、管线优化前后对比图、结构优化对比图\n\
+            - 施工与交付类：施工模拟关键步骤图、进度与模型联动示意图、BIM成果交付清单图\n- 管理与协同类（仅在需要时）：BIM协同流程图、组织架构图、职责分工矩阵、问题闭环流程图、质量管理流程图、里程碑计划表\n\
+            \n### 允许用表格替代图表\n若信息更适合结构化展示（如配置清单、人员矩阵、进度计划、交付清单），可用表格替代图表占位符。\n\n##\
+            \ 正文组织方式：根据内容特点自然选择\n\n### 核心理念：段落为主，格式为辅\n\n**重要原则**：投标书是正式的技术文档，段落叙述是主流（约占70-80%），列举和表格是辅助手段（约占20-30%）。不要过度格式化，保持文档的流畅性和严谨性。\n\
+            \n### 如何判断使用何种组织方式？\n\n**段落叙述（主流，占70-80%）**：\n- 使用场景：技术原理、实施方案、流程说明、背景介绍、体系阐述\n\
+            - 判断标准：内容之间有因果、递进、转折关系，需要连贯展开\n- 特点：完整、深入、有逻辑性\n\n**•符号列举（辅助，占15-20%）**：\n\
+            - 使用场景：3-5个平行的、独立的技术要点或措施\n- 判断标准：仅当要点之间是明确的并列关系，且每个可以独立成句时使用\n- 特点：清晰、易扫描、结构化\n\
+            - 要求：需根据实际内容判断，若内容不适合该结构则不使用。\n\n**表格（辅助，占5-10%）**：\n- 使用场景：多维度信息需要结构化展示（见下方详细说明）\n\
+            - 判断标准：内容有多个属性维度，需要对比或查找\n- 特点：信息密度高、易对比、节省篇幅\n\n**小标题展开（辅助）**：\n- 使用场景：有明确阶段划分（准备、实施、验收）\n\
+            - 判断标准：需要用标题区分不同环节，每个环节用段落展开\n- 特点：结构清晰、层次分明\n\n### 表格使用场景详解\n\n**适合用表格的场景**：\n\
+            1. **软硬件配置清单**：| 名称 | 版本 | 数量 | 用途 |\n2. **人员配置矩阵**：| 岗位 | 人数 | 职责 | 技能要求\
+            \ |\n3. **精度标准对照**：| 专业 | LOD等级 | 构件要求 | 交付格式 |\n4. **阶段进度计划**：| 阶段 |\
+            \ 时间 | 工作内容 | 交付成果 |\n5. **方案对比分析**：| 对比维度 | 方案A | 方案B | 优势分析 |\n6. **责任分工表**：|\
+            \ 专业 | 负责人 | 配合方 | 审核人 |\n\n**表格使用原则**：\n- 只在确实需要时使用（每2000字内容中1-2个表格为宜）\n\
+            - 表格内容需要后续用段落展开说明，不能仅用表格代替论述\n- 表格用于结构化展示信息，详细内容仍需段落叙述\n- 避免整段内容被表格替代\n\
+            \n**Markdown表格语法**：\n```\n| 列1 | 列2 | 列3 |\n|-----|-----|------|\n| 内容1\
+            \ | 内容2 | 内容3 |\n```\n\n### 完整示例：段落、列举、表格的自然配合\n\n以下是一个完整的BIM协同平台配置方案小节示例（约1000字），注意三者的自然配合：\n\
+            \n```\n## 3.1 BIM协同平台配置方案\n\n（评分响应：招标文件第X页\"协同平台要求\"，评分项\"平台配置\"8分）\n\n\
+            本项目采用私有化部署的BIM协同平台，基于BIMFace云平台架构进行二次开发，建立项目专属的协同工作环境。平台采用CDE（Common Data\
+            \ Environment）模式，确保数据源的统一性和版本的可追溯性，满足多方协同的数据管理需求。平台配置将充分考虑数据安全、访问速度和用户体验，建立高效的协同工作机制。\n\
+            \n平台配置包括以下核心功能模块：\n\n• 模型管理模块：支持RVT、IFC等主流格式的模型上传、版本管理和轻量化浏览，实现模型的在线查看和批注，确保各方能够及时获取最新版本模型。\n\
+            \n• 协同审核模块：提供问题追踪、审批流程、通知提醒等功能，将设计问题和修改意见纳入闭环管理，确保每个问题都有明确的责任人和解决时限。\n\
+            \n• 权限管理模块：基于角色的访问控制（RBAC），根据项目参与方的职责分配不同权限，保障数据安全，防止非授权访问和数据泄露。\n\n软硬件配置方案如下表所示：\n\
+            \n| 类别 | 名称 | 版本/规格 | 数量 | 用途 | 备注 |\n|-----|------|----------|------|------|------|\n\
+            | 服务器 | Dell PowerEdge R740 | 32核/128G | 2台 | 模型服务器、数据服务器 | 双机热备 |\n|\
+            \ 数据库 | SQL Server | 2019企业版 | 1套 | 数据存储 | 含备份系统 |\n| 建模软件 | Revit | 2022版\
+            \ | 10套 | 土建/机电建模 | 含Navisworks |\n| 协同平台 | BIMFace | 企业版 | 1套 | 模型轻量化、协同管理\
+            \ | 私有化部署 |\n\n人员配置方面，项目组建立专门的BIM协同团队，明确各岗位职责和分工，确保平台高效运行：\n\n| 岗位 | 人数\
+            \ | 职责 | 技能要求 |\n|-----|------|------|---------|\n| BIM总监 | 1 | 总体策划、技术把控、质量审核\
+            \ | 10年以上BIM经验，熟悉全流程 |\n| BIM工程师 | 3 | 模型创建、审核、问题处理 | 熟练掌握Revit，有大型项目经验\
+            \ |\n| 协同管理员 | 1 | 平台运维、权限管理、技术支持 | 熟悉CDE模式，有系统管理经验 |\n\n平台部署分阶段推进。第一阶段为平台搭建阶段，项目组在进场后2周内完成服务器采购、软件安装和基础配置，建立项目数据库和权限体系。同时开展全员培训，确保所有参与方掌握平台的使用方法和操作规范。第二阶段为试运行阶段，选取核心区域开展协同测试，验证平台功能的完整性和稳定性，针对发现的问题及时优化调整。第三阶段为全面应用阶段，所有参与方接入平台，正式开展协同工作，项目组每周监控平台运行情况，确保系统稳定可靠。\n\
+            \n质量控制方面，平台建立了完善的数据备份和安全机制。每日自动备份模型数据和业务数据，备份保留3个版本，确保数据可恢复。所有操作记录可追溯，确保问题责任可查，为项目争议解决提供依据。设置异地容灾服务器，保障数据安全，防范单点故障风险。\n\
+            ```\n\n### 示例分析：为什么这样组织？\n\n1. 开篇段落（约150字）→ 阐述平台总体方案和核心理念 → 用段落（需要完整说明）\n\
+            2. •列举（约200字）→ 3个核心模块 → 用列举（平行关系，易于扫描）\n3. 表格1（10行5列）→ 软硬件配置 → 用表格（多维度信息，结构化展示）\n\
+            4. 表格2（4行4列）→ 人员配置 → 用表格（矩阵信息，清晰明了）\n5. 段落（约300字）→ 实施流程 → 用段落（递进关系，需要连贯）\n\
+            6. 段落（约150字）→ 质量控制 → 用段落（体系说明）\n\n**比例分析**：段落约75%，列举约15%，表格约10%\n\n###\
+            \ 写作建议\n\n1. 先构思内容逻辑，再决定组织方式\n2. 问自己：这部分内容的逻辑关系是什么？平列？递进？因果？\n3. 问自己：评标专家如何阅读更高效？需要对比就用表格，需要理解思路就用段落\n\
+            4. 同一个小节内可以混合使用多种方式，但段落必须占主导\n5. 表格用于结构化展示，详细内容仍需段落展开\n\n## 输出格式\n\n##\
+            \ X.1 小节标题1\n\n（评分响应：[明确指出该小节响应的评分项和要求，用一句话概括]）\n\n[段落叙述为主，辅以•列举和表格，让形式服务于内容]\n\
+            \n【图：相关图表名称】\n（图表说明文字：简要描述图表展示的内容）\n\n[继续内容...]\n\n## X.2 小节标题2\n\n（评分响应：[明确指出该小节响应的评分项和要求]）\n\
+            \n[段落叙述为主，辅以•列举和表格]\n\n...\n\n## 内容质量要求\n\n### 必须包含\n- **评分对应性**：每个小节开头用括号标注对应的评分项\n\
+            - **技术完整性**：理论依据、技术方案、实施措施、质量保证\n- **术语准确性**：使用BIM行业标准术语（如LOD、IFC、BEP等）\n\
+            - **要求响应性**：紧扣招标文件中的BIM技术要求\n- **形式服务于内容**：根据内容逻辑选择组织方式，段落为主、格式为辅\n\n\
+            ### 避免问题\n- 空洞表述（\"我们具有丰富经验\"、\"确保质量\"）\n- 重复套话（多个小节使用相同表述）\n- 未经转化的知识库原文照搬\n\
+            - 机械的1、2、3、4编号（用•符号或段落代替）\n- 口语化表述（\"首先、其次、然后\"等）\n- 过度格式化（大段内容被表格替代）\n\
+            \n### 注意事项\n- 引用知识库内容时需转化为适合本项目的表述\n- 保持客观专业的技术陈述风格\n- 避免过度承诺或夸大表述\n-\
+            \ **段落叙述是主流，表格和列举是辅助，每2000字内容中表格不超过2个**\n"
+        - id: bc353c0b-2a99-4dcc-9257-521fa11b723b
+          role: user
+          text: '请根据以下信息撰写完整的章节内容：
+
+
+            **章节：** {{#1768800001.item.full_name#}}
+
+
+            **小节大纲：**
+
+            {{#1768800003.text#}}
+
+
+            **招标要求参考：**
+
+            {{#llm.text#}}
+
+
+            **BIM技术要求：**
+
+            {{#param_extractor.bim_requirements#}}
+
+
+            **项目信息：**
+
+            {{#param_extractor.project_info#}}
+
+
+            **知识库参考：**
+
+            {{#context#}}
+
+
+            请严格按照以下要求撰写：
+
+            1. 识别章节类型（核心技术/管理保障/项目理解），采用对应的字数和深度要求
+
+            2. 每个小节开头用括号标注"评分响应"，作为提示性内容（非正文）
+
+            3. 在适当位置插入图表占位符【图：图表名称】
+
+            4. 紧扣招标文件中的评分细则和技术要求
+
+            5. **段落叙述是主流（70-80%）**，用于技术原理、实施方案、流程说明等需要连贯展开的内容
+
+            6. **•列举是辅助（15-20%）**，用于3-5个平行的、独立的技术要点或措施
+
+            7. **表格是辅助（5-10%）**，用于软硬件配置、人员配置、标准对照等多维度信息，每2000字中1-2个表格为宜
+
+            8. 必要时可以使用小标题展开各环节（如"准备阶段"、"实施阶段"等）
+
+            9. 不要使用机械的1、2、3、4编号，不要使用"首先、其次、然后"等口语化表述
+
+            10. 避免空洞表述和过度格式化，内容要有技术深度
+
+            '
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 5000
+        selected: false
+        title: 生成完整章节内容
+        type: llm
+        vision:
+          enabled: false
+      height: 118
+      id: '1768800005'
+      parentId: '1768800001'
+      position:
+        x: 1472
+        y: 85
+      positionAbsolute:
+        x: 4224.7766966202225
+        y: 260.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 1002
+    - data:
+        selected: false
+        template: '# BIM技术标完整文档
+
+
+          ## 项目信息
+
+          {{ project_info_md }}
+
+
+          ---
+
+
+          {% for chapter in chapters %}
+
+          {{ chapter }}
+
+
+          ---
+
+
+          {% endfor %}
+
+
+          ## 附录
+
+
+          ### 风险点提醒
+
+          {% for risk in risk_points %}
+
+          - {{ risk }}
+
+          {% endfor %}
+
+          '
+        title: 文档聚合
+        type: template-transform
+        variables:
+        - value_selector:
+          - '1768800001'
+          - output
+          variable: chapters
+        - value_selector:
+          - project_info_formatter
+          - project_info_md
+          variable: project_info_md
+        - value_selector:
+          - param_extractor
+          - risk_points
+          variable: risk_points
+      height: 52
+      id: template_aggregator
+      position:
+        x: 6582
+        y: 141
+      positionAbsolute:
+        x: 6582
+        y: 141
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '{{#1769672667122.files#}}
+
+          {{#1768800006.hint_message#}}
+
+          {{#template_aggregator.output#}}'
+        selected: false
+        title: BIM技术标完整文档输出
+        type: answer
+        variables: []
+      height: 141
+      id: answer
+      position:
+        x: 7266
+        y: 96
+      positionAbsolute:
+        x: 7266
+        y: 96
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        answer: '-------------------------------------------------------
+
+          正在生成：{{#1768800001.item.full_name#}}
+
+          -------------------------------------------------------'
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        selected: false
+        title: 直接回复 5
+        type: answer
+        variables: []
+      height: 167
+      id: '1769067954039'
+      parentId: '1768800001'
+      position:
+        x: 184
+        y: 60
+      positionAbsolute:
+        x: 2936.7766966202225
+        y: 235.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 1002
+    - data:
+        authorization:
+          config:
+            api_key: '{{#env.DOC_API_KEY#}}'
+            type: bearer
+          type: api-key
+        body:
+          data:
+          - id: key-value-401
+            key: ''
+            type: text
+            value: "{\n  \"query\": \"{{#llm.text#}}\",\n  \"kb_ids\": [\n    \"69725828f7f898efad71e93c\"\
+              \n  ],\n  \"retrieval_setting\": {\n    \"top_k\": 10,\n    \"score_threshold\"\
+              : 0.5\n  }\n}"
+          type: json
+        headers: ''
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 3
+          retry_enabled: true
+          retry_interval: 100
+        selected: false
+        ssl_verify: true
+        timeout:
+          max_connect_timeout: 0
+          max_read_timeout: 0
+          max_write_timeout: 0
+        title: HTTP 检索
+        type: http-request
+        url: https://doc.bluedigit.ai/api/retrieve
+        variables: []
+      height: 138
+      id: '1769096835976'
+      position:
+        x: 1355
+        y: 175.5113935071564
+      positionAbsolute:
+        x: 1355
+        y: 175.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        is_team_authorization: true
+        paramSchemas:
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: The Markdown content to be converted to Word document
+            ja_JP: Word ドキュメントに変換する Markdown コンテンツ
+            pt_BR: O conteúdo Markdown a ser convertido para documento Word
+            zh_Hans: 要转换为Word文档的Markdown内容
+          label:
+            en_US: Markdown Content
+            ja_JP: Markdown コンテンツ
+            pt_BR: Conteúdo Markdown
+            zh_Hans: Markdown内容
+          llm_description: The Markdown content that will be converted to a Word document
+          max: null
+          min: null
+          name: markdown_content
+          options: []
+          placeholder: null
+          precision: null
+          required: true
+          scope: null
+          template: null
+          type: string
+        - auto_generate: null
+          default: null
+          form: llm
+          human_description:
+            en_US: The title of the Word document
+            ja_JP: Word ドキュメントのタイトル
+            pt_BR: O título do documento Word
+            zh_Hans: Word文档的标题
+          label:
+            en_US: Document Title
+            ja_JP: ドキュメントタイトル
+            pt_BR: Título do Documento
+            zh_Hans: 文档标题
+          llm_description: The title that will be displayed at the top of the Word
+            document
+          max: null
+          min: null
+          name: title
+          options: []
+          placeholder: null
+          precision: null
+          required: false
+          scope: null
+          template: null
+          type: string
+        params:
+          markdown_content: ''
+          title: ''
+        plugin_id: stvlynn/doc
+        plugin_unique_identifier: stvlynn/doc:0.0.1@900d82963e63c505136dfc77f3e06329326e714ca66bed668224e811f73efc7b
+        provider_icon: /console/api/workspaces/current/plugin/icon?tenant_id=2bf463c2-a3b0-4980-99bc-be564b28d808&filename=cb0643689e2f8152d38c44a267a459fae99ff208b0bc164e27ccb053fc1844cd.svg
+        provider_id: stvlynn/doc/doc
+        provider_name: stvlynn/doc/doc
+        provider_type: builtin
+        selected: false
+        title: Markdown转DOCX转换器
+        tool_configurations: {}
+        tool_description: 将Markdown内容转换为DOCX（Word）文档
+        tool_label: Markdown转DOCX转换器
+        tool_name: markdown_to_docx_converter
+        tool_node_version: '2'
+        tool_parameters:
+          markdown_content:
+            type: mixed
+            value: '{{#template_aggregator.output#}}'
+          title:
+            type: mixed
+            value: null
+        type: tool
+      height: 52
+      id: '1769672667122'
+      position:
+        x: 6924
+        y: 98
+      positionAbsolute:
+        x: 6924
+        y: 98
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+    - data:
+        code: "import time\n\n\ndef main(text: str) -> dict:\n    \"\"\"\n    Sleep\
+          \ to throttle iteration and return the text unchanged.\n    \"\"\"\n   \
+          \ time.sleep(10)\n    return {\"text\": text}\n"
+        code_language: python3
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        outputs:
+          text:
+            children: null
+            type: string
+        selected: false
+        title: 迭代延时02
+        type: code
+        variables:
+        - value_selector:
+          - '1768800007'
+          - text
+          value_type: string
+          variable: text
+      height: 52
+      id: '1769583527062'
+      parentId: '1768800001'
+      position:
+        x: 2116
+        y: 118
+      positionAbsolute:
+        x: 4868.7766966202225
+        y: 293.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 1002
+    - data:
+        code: "import time\n\n\ndef main(text: str) -> dict:\n    \"\"\"\n    Sleep\
+          \ to throttle iteration and return the text unchanged.\n    \"\"\"\n   \
+          \ time.sleep(10)\n    return {\"text\": text}\n"
+        code_language: python3
+        isInIteration: true
+        isInLoop: false
+        iteration_id: '1768800001'
+        outputs:
+          text:
+            children: null
+            type: string
+        selected: false
+        title: 迭代延时03
+        type: code
+        variables:
+        - value_selector:
+          - '1769583527062'
+          - text
+          value_type: string
+          variable: text
+      height: 52
+      id: '1769585258856'
+      parentId: '1768800001'
+      position:
+        x: 2438
+        y: 118
+      positionAbsolute:
+        x: 5190.7766966202225
+        y: 293.5113935071564
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 242
+      zIndex: 1002
+    viewport:
+      x: 49.815445738981225
+      y: 440.9054771717793
+      zoom: 0.5743491774985191
+  rag_pipeline_variables: []
