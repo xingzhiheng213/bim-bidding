@@ -7,8 +7,10 @@ from pydantic import BaseModel, Field
 from app.model_registry import list_supported_models
 from app.settings_store import (
     get_all_providers_status,
+    get_export_format_config,
     get_model_config,
     set_api_key_in_db,
+    set_export_format_config,
     set_model_config,
     update_base_url_in_db,
     SUPPORTED_PROVIDERS,
@@ -137,3 +139,56 @@ def post_settings_models(body: PostModelsBody):
             "chapters": cfg.get("chapters_model"),
         },
     }
+
+
+# --- Export format (stage 7.1) ---
+
+
+class PostExportFormatBody(BaseModel):
+    """All optional; omit or null = keep current / use default."""
+
+    heading_1_font: str | None = Field(None, description="一级标题字体")
+    heading_1_size_pt: int | None = Field(None, description="一级标题字号（磅）", ge=8, le=72)
+    heading_2_font: str | None = Field(None, description="二级标题字体")
+    heading_2_size_pt: int | None = Field(None, description="二级标题字号", ge=8, le=72)
+    heading_3_font: str | None = Field(None, description="三级标题字体")
+    heading_3_size_pt: int | None = Field(None, description="三级标题字号", ge=8, le=72)
+    body_font: str | None = Field(None, description="正文字体")
+    body_size_pt: int | None = Field(None, description="正文字号", ge=8, le=72)
+    table_font: str | None = Field(None, description="表格内字体")
+    table_size_pt: int | None = Field(None, description="表格内字号", ge=8, le=72)
+    first_line_indent_pt: int | None = Field(None, description="首行缩进（磅），0 或不传表示不缩进", ge=0, le=100)
+    line_spacing: float | None = Field(None, description="行距倍数，如 1.0 / 1.5", ge=0.5, le=3.0)
+
+
+@router.get("/export-format")
+def get_settings_export_format():
+    """Return current export format config (defaults when not configured)."""
+    try:
+        return get_export_format_config()
+    except Exception:
+        from app.settings_store import DEFAULT_EXPORT_FORMAT
+        return dict(DEFAULT_EXPORT_FORMAT)
+
+
+@router.post("/export-format")
+def post_settings_export_format(body: PostExportFormatBody):
+    """Save export format config; returns full current config."""
+    try:
+        set_export_format_config(
+            heading_1_font=body.heading_1_font,
+            heading_1_size_pt=body.heading_1_size_pt,
+            heading_2_font=body.heading_2_font,
+            heading_2_size_pt=body.heading_2_size_pt,
+            heading_3_font=body.heading_3_font,
+            heading_3_size_pt=body.heading_3_size_pt,
+            body_font=body.body_font,
+            body_size_pt=body.body_size_pt,
+            table_font=body.table_font,
+            table_size_pt=body.table_size_pt,
+            first_line_indent_pt=body.first_line_indent_pt,
+            line_spacing=body.line_spacing,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return get_export_format_config()

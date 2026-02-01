@@ -50,7 +50,7 @@ docker compose -f Docker/docker-compose.yml up -d --build
 | celery   | —     | 异步任务（解析、LLM、按章生成等） |
 | frontend | 8080  | 前端静态（Nginx） |
 
-上传文件、导出 DOCX 等数据会持久化在 Docker 卷中（`backend_uploads`、`backend_exports`、`postgres_data`），重启或 `down` 后再次 `up` 不会丢失。
+上传文件、导出 DOCX 等数据会持久化在 Docker 卷中（`backend_uploads`、`backend_exports`、`postgres_data`），重启或 `down` 后再次 `up` 不会丢失。**首次启动**时后端会自动创建数据库表（含任务、步骤、设置、导出格式等），无需手动迁移。
 
 ---
 

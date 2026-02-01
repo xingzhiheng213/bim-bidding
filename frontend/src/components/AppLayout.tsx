@@ -12,11 +12,11 @@ const { Title } = Typography
 
 const SIDER_WIDTH = 220
 
-const menuItems = [
+const mainNavItems = [
   { key: '/', label: '首页' },
-  { key: '/settings', label: '设置' },
   { key: '/compare', label: '对比' },
 ]
+const bottomNavItems = [{ key: '/settings', label: '设置' }]
 
 const contentStyle: React.CSSProperties = {
   padding: designTokens.marginLG,
@@ -42,41 +42,77 @@ export default function AppLayout() {
       <Sider
         width={SIDER_WIDTH}
         style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          height: '100vh',
+          zIndex: 100,
           background: designTokens.colorBgContainer,
           borderRight: `1px solid ${designTokens.colorBorderSecondary}`,
+          overflow: 'hidden',
         }}
       >
         <div
           style={{
-            padding: designTokens.marginLG,
-            borderBottom: `1px solid ${designTokens.colorBorderSecondary}`,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: '100vh',
+            height: '100%',
           }}
         >
-          <Title
-            level={5}
+          <div
             style={{
-              margin: 0,
-              color: designTokens.colorText,
-              fontWeight: designTokens.fontWeightStrong,
-              fontSize: designTokens.fontSizeHeading5,
+              padding: designTokens.marginLG,
+              borderBottom: `1px solid ${designTokens.colorBorderSecondary}`,
+              flexShrink: 0,
             }}
           >
-            BIM 标书生成
-          </Title>
+            <Title
+              level={5}
+              style={{
+                margin: 0,
+                color: designTokens.colorText,
+                fontWeight: designTokens.fontWeightStrong,
+                fontSize: designTokens.fontSizeHeading5,
+              }}
+            >
+              BIM 标书生成
+            </Title>
+          </div>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+            <Menu
+              mode="inline"
+              items={mainNavItems}
+              selectedKeys={[selectedKey]}
+              style={{
+                marginTop: designTokens.marginXS,
+                borderRight: 'none',
+                background: 'transparent',
+              }}
+              onClick={({ key }) => navigate(key)}
+            />
+          </div>
+          <div
+            style={{
+              borderTop: `1px solid ${designTokens.colorBorderSecondary}`,
+              flexShrink: 0,
+            }}
+          >
+            <Menu
+              mode="inline"
+              items={bottomNavItems}
+              selectedKeys={[selectedKey]}
+              style={{
+                borderRight: 'none',
+                background: 'transparent',
+              }}
+              onClick={({ key }) => navigate(key)}
+            />
+          </div>
         </div>
-        <Menu
-          mode="inline"
-          items={menuItems}
-          selectedKeys={[selectedKey]}
-          style={{
-            marginTop: designTokens.marginXS,
-            borderRight: 'none',
-            background: 'transparent',
-          }}
-          onClick={({ key }) => navigate(key)}
-        />
       </Sider>
-      <Layout>
+      <Layout style={{ marginLeft: SIDER_WIDTH, minHeight: '100vh' }}>
         <Content style={contentStyle}>
           <Outlet />
         </Content>

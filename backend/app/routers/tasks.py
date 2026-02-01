@@ -14,6 +14,7 @@ from app.database import get_db
 from app.diff_compare import compute_diff
 from app.export_docx import markdown_to_docx
 from app.models import Task, TaskStep
+from app.settings_store import get_export_format_config
 from app.schemas.compare import DiffResponse
 from app.schemas.task import (
     AcceptFrameworkRequest,
@@ -672,7 +673,8 @@ def download_docx(task_id: int, db: Session = Depends(get_db)):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    doc = markdown_to_docx(md)
+    format_options = get_export_format_config()
+    doc = markdown_to_docx(md, format_options)
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)

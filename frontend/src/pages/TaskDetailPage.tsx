@@ -653,19 +653,36 @@ function TaskDetailPage() {
               />
             )}
 
+            {frameworkStep?.status === 'waiting_user' && (
+              <Alert
+                type="warning"
+                message="当前步骤：框架待确认 — 请确认框架或添加要点后继续。"
+                showIcon
+                style={{ marginBottom: designTokens.marginLG }}
+              />
+            )}
+
             {TASK_STEP_ORDER.map((stepKey) => {
               const step = data.steps?.find((s) => s.step_key === stepKey)
               const status: StepStatus =
                 step && ['pending', 'running', 'waiting_user', 'completed', 'failed'].includes(step.status)
                   ? (step.status as StepStatus)
                   : 'pending'
+              const cardStyle: React.CSSProperties =
+                stepKey === 'framework' && status === 'waiting_user'
+                  ? {
+                      marginBottom: designTokens.marginLG,
+                      borderLeft: `4px solid ${designTokens.colorWarning}`,
+                      background: 'rgba(250, 173, 20, 0.06)',
+                    }
+                  : { marginBottom: designTokens.marginLG }
               return (
                 <Card
                   key={stepKey}
                   id={`step-${stepKey}`}
                   title={STEP_TITLES[stepKey]}
                   extra={<Tag color={stepStatusDisplay[status].tagColor}>{getStepStatusLabel(status)}</Tag>}
-                  style={{ marginBottom: designTokens.marginLG }}
+                  style={cardStyle}
                 >
                   {stepKey === 'upload' && (
                     <>
@@ -818,7 +835,12 @@ function TaskDetailPage() {
                       )}
                       {frameworkStep?.status === 'waiting_user' && frameworkChapters.length > 0 && (
                         <div style={{ marginBottom: designTokens.marginSM }}>
-                          <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginXS }}>请选择：接受并继续、重新生成或添加要点。</Text>
+                          <Alert
+                            type="warning"
+                            message="请确认框架或添加要点后继续。"
+                            showIcon
+                            style={{ marginBottom: designTokens.marginSM }}
+                          />
                           <Button type="primary" style={{ marginRight: 8 }} loading={acceptFrameworkMutation.isPending} onClick={handleAcceptAndContinue}>接受并继续</Button>
                           <Button style={{ marginRight: 8 }} loading={regenerateFrameworkMutation.isPending} onClick={handleRegenerateFramework}>重新生成框架</Button>
                           <Button style={{ marginRight: 8 }} loading={savePointsMutation.isPending} onClick={handleOpenAddPoints}>添加要点</Button>

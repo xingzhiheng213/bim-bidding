@@ -71,3 +71,32 @@ export async function postSettingsModels(body: PostSettingsModelsBody): Promise<
   const { data } = await api.post<GetSettingsModelsResponse>('/api/settings/models', body)
   return data
 }
+
+// --- Export format (stage 7.3) ---
+
+export interface ExportFormatConfig {
+  heading_1_font?: string
+  heading_1_size_pt?: number
+  heading_2_font?: string
+  heading_2_size_pt?: number
+  heading_3_font?: string
+  heading_3_size_pt?: number
+  body_font?: string
+  body_size_pt?: number
+  table_font?: string
+  table_size_pt?: number
+  first_line_indent_pt?: number
+  line_spacing?: number
+}
+
+export async function getSettingsExportFormat(): Promise<ExportFormatConfig> {
+  const { data } = await api.get<ExportFormatConfig>('/api/settings/export-format')
+  return data
+}
+
+export async function postSettingsExportFormat(
+  body: Partial<ExportFormatConfig>,
+): Promise<ExportFormatConfig> {
+  const { data } = await api.post<ExportFormatConfig>('/api/settings/export-format', body)
+  return data
+}

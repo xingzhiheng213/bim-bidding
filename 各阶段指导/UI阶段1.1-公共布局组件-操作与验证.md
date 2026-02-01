@@ -7,7 +7,7 @@
 ## 一、阶段 1.1 要达成什么
 
 - **布局结构**：`AppLayout` 为 **侧栏（Sider）+ 主内容区（Content）**；左侧固定侧栏，右侧为内层 `Layout` 内仅 `Content`，`Content` 内渲染 `<Outlet />`。
-- **侧栏内容**：侧栏顶部为品牌/标题「BIM 标书生成」；其下为导航项「首页」「设置」「对比」，点击可正确跳转；样式使用 design token（背景、边框、字号、间距）。
+- **侧栏内容**：侧栏顶部为品牌/标题「BIM 标书生成」；其下为主导航「首页」「对比」；「设置」固定在侧栏最底部（与主导航有分隔线，符合常见商业软件习惯）。点击可正确跳转；样式使用 design token（背景、边框、字号、间距）。
 - **路由**：首页、设置、对比、任务详情仍作为 `AppLayout` 的子路由，路由结构不变；各页面只渲染内容区，由 AppLayout 的 Content 承载。
 - **交付物**：`AppLayout` 组件（侧栏 + 主内容区）+ 路由结构；所有现有页面在统一布局下正常显示。
 
@@ -34,7 +34,7 @@
 - **侧栏（Sider）**：
   - 固定宽度（如 220px），背景与边框使用 `designTokens.colorBgContainer`、`colorBorderSecondary`。
   - 顶部品牌区：标题「BIM 标书生成」，使用 design token 字号/字重/颜色（如 `fontSizeHeading5`、`fontWeightStrong`、`colorText`），上下间距（如 `marginLG`、`marginXS`）。
-  - 其下导航：使用 Ant Design `Menu` 的 `mode="inline"`，或等价链接；项为「首页」（`/`）、「设置」（`/settings`）、「对比」（`/compare`）；点击跳转（如 `useNavigate` 或 `Link`）；可选根据当前路由设置 `selectedKeys` 以便 1.2 做高亮。
+  - 其下导航：使用 Ant Design `Menu` 的 `mode="inline"`，或等价链接；主导航项为「首页」（`/`）、「对比」（`/compare`）；「设置」（`/settings`）单独在侧栏底部（通过 flex 布局使设置贴底，与主导航有分隔线）；点击跳转（如 `useNavigate` 或 `Link`）；可选根据当前路由设置 `selectedKeys` 以便 1.2 做高亮。
 - **主内容区**：Content 的 padding 使用 `designTokens.marginLG`，内部仅 `<Outlet />`。
 - **样式**：侧栏与 Content 均使用 design token，无新增硬编码色值或间距。
 

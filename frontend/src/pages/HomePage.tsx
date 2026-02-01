@@ -1,11 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { Button, message, Popconfirm, Table, Typography } from 'antd'
+import { Button, Empty, message, Popconfirm, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { createTask, deleteTask, getTasks, type TaskSummary } from '../api/tasks'
+import { designTokens } from '../theme/tokens'
+import { getStepStatusLabel, stepStatusDisplay, type StepStatus } from '../theme/stepStatus'
 import '../App.css'
 
-const { Title } = Typography
+const { Title, Text } = Typography
+
+const TASK_STATUS_VALUES: StepStatus[] = ['pending', 'running', 'waiting_user', 'completed', 'failed']
+function getTaskStatusDisplay(status: string): { tagColor: 'default' | 'primary' | 'success' | 'warning' | 'error'; label: string } {
+  if (TASK_STATUS_VALUES.includes(status as StepStatus)) {
+    const s = status as StepStatus
+    return { tagColor: stepStatusDisplay[s].tagColor, label: getStepStatusLabel(s) }
+  }
+  return { tagColor: 'default', label: status || '待执行' }
+}
 
 function HomePage() {
   const navigate = useNavigate()
@@ -53,8 +64,16 @@ function HomePage() {
   })
 
   const taskColumns: ColumnsType<TaskSummary> = [
-    { title: '任务 ID', dataIndex: 'id', key: 'id', width: 100 },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      width: 120,
+      render: (status: string) => {
+        const { tagColor, label } = getTaskStatusDisplay(status)
+        return <Tag color={tagColor}>{label}</Tag>
+      },
+    },
     {
       title: '创建时间',
       dataIndex: 'created_at',
@@ -62,12 +81,19 @@ function HomePage() {
       render: (v: string) => new Date(v).toLocaleString(),
     },
     {
+      title: '任务 ID',
+      dataIndex: 'id',
+      key: 'id',
+      width: 80,
+      render: (id: number) => <Text type="secondary">{id}</Text>,
+    },
+    {
       title: '操作',
       key: 'action',
       width: 140,
       render: (_, record) => (
         <span onClick={(e) => e.stopPropagation()}>
-          <Link to={`/tasks/${record.id}`} style={{ marginRight: 8 }}>
+          <Link to={`/tasks/${record.id}`} style={{ marginRight: designTokens.marginXS }}>
             进入
           </Link>
           <Popconfirm
@@ -85,10 +111,13 @@ function HomePage() {
 
   return (
     <>
-      <Title level={2} style={{ marginBottom: 16 }}>
+      <Title level={2} style={{ marginBottom: designTokens.marginLG }}>
         我的任务
       </Title>
-      <div style={{ marginTop: 24 }}>
+      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginLG }}>
+        上传招标文件，一键生成标书
+      </Text>
+      <div style={{ marginBottom: designTokens.marginLG }}>
         <Button
           type="primary"
           loading={createMutation.isPending}
@@ -97,7 +126,7 @@ function HomePage() {
           创建任务
         </Button>
       </div>
-      <Title level={5} style={{ marginTop: 24, marginBottom: 12 }}>
+      <Title level={5} style={{ marginTop: designTokens.marginXL, marginBottom: designTokens.marginSM }}>
         任务列表
       </Title>
       <Table<TaskSummary>
@@ -106,7 +135,24 @@ function HomePage() {
         dataSource={tasksData ?? []}
         loading={tasksLoading}
         pagination={{ pageSize: 10 }}
-        locale={{ emptyText: '暂无任务，请点击上方按钮创建' }}
+        locale={{
+          emptyText: (
+            <div style={{ padding: designTokens.paddingLG }}>
+              <Empty
+                description="暂无任务，点击下方按钮创建第一个标书任务"
+                extra={
+                  <Button
+                    type="primary"
+                    loading={createMutation.isPending}
+                    onClick={() => createMutation.mutate()}
+                  >
+                    创建任务
+                  </Button>
+                }
+              />
+            </div>
+          ),
+        }}
         onRow={(record) => ({
           onClick: () => navigate(`/tasks/${record.id}`),
           style: { cursor: 'pointer' },

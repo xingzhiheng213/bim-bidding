@@ -8,7 +8,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import LlmSetting, PlatformLlmConfig
+from app.models import LlmSetting, PlatformLlmConfig, ExportFormatSetting
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +140,132 @@ def get_all_providers_status() -> list[dict]:
             else:
                 result.append({"provider": provider, "configured": False, "masked_key": None, "base_url": None})
         return result
+    finally:
+        db.close()
+
+
+# --- Export format settings (stage 7.1) ---
+
+EXPORT_FORMAT_KEYS = (
+    "heading_1_font", "heading_1_size_pt",
+    "heading_2_font", "heading_2_size_pt",
+    "heading_3_font", "heading_3_size_pt",
+    "body_font", "body_size_pt",
+    "table_font", "table_size_pt",
+    "first_line_indent_pt", "line_spacing",
+)
+
+DEFAULT_EXPORT_FORMAT: dict = {
+    "heading_1_font": "宋体",
+    "heading_1_size_pt": 22,
+    "heading_2_font": "宋体",
+    "heading_2_size_pt": 16,
+    "heading_3_font": "宋体",
+    "heading_3_size_pt": 14,
+    "body_font": "宋体",
+    "body_size_pt": 12,
+    "table_font": "宋体",
+    "table_size_pt": 12,
+    "first_line_indent_pt": 24,
+    "line_spacing": 1.5,
+}
+
+FONT_SIZE_MIN, FONT_SIZE_MAX = 8, 72
+LINE_SPACING_MIN, LINE_SPACING_MAX = 0.5, 3.0
+FIRST_LINE_INDENT_MAX = 100
+
+
+def get_export_format_config() -> dict:
+    """Return export format config dict (merge DB row with defaults); for 7.2 format_options."""
+    db: Session = SessionLocal()
+    try:
+        row = db.query(ExportFormatSetting).first()
+        if not row:
+            return dict(DEFAULT_EXPORT_FORMAT)
+        out = dict(DEFAULT_EXPORT_FORMAT)
+        for key in EXPORT_FORMAT_KEYS:
+            val = getattr(row, key, None)
+            if val is not None:
+                out[key] = val
+        return out
+    finally:
+        db.close()
+
+
+def set_export_format_config(
+    heading_1_font: str | None = None,
+    heading_1_size_pt: int | None = None,
+    heading_2_font: str | None = None,
+    heading_2_size_pt: int | None = None,
+    heading_3_font: str | None = None,
+    heading_3_size_pt: int | None = None,
+    body_font: str | None = None,
+    body_size_pt: int | None = None,
+    table_font: str | None = None,
+    table_size_pt: int | None = None,
+    first_line_indent_pt: int | None = None,
+    line_spacing: float | None = None,
+) -> None:
+    """Upsert single row of export format settings; validate sizes and ranges."""
+    for attr, val in (
+        ("heading_1_size_pt", heading_1_size_pt),
+        ("heading_2_size_pt", heading_2_size_pt),
+        ("heading_3_size_pt", heading_3_size_pt),
+        ("body_size_pt", body_size_pt),
+        ("table_size_pt", table_size_pt),
+    ):
+        if val is not None and (val < FONT_SIZE_MIN or val > FONT_SIZE_MAX):
+            raise ValueError(f"字号 {attr} 应在 {FONT_SIZE_MIN}–{FONT_SIZE_MAX} 之间")
+    if first_line_indent_pt is not None and (first_line_indent_pt < 0 or first_line_indent_pt > FIRST_LINE_INDENT_MAX):
+        raise ValueError(f"首行缩进应在 0–{FIRST_LINE_INDENT_MAX} 磅之间")
+    if line_spacing is not None and (line_spacing < LINE_SPACING_MIN or line_spacing > LINE_SPACING_MAX):
+        raise ValueError(f"行距应在 {LINE_SPACING_MIN}–{LINE_SPACING_MAX} 之间")
+
+    db: Session = SessionLocal()
+    try:
+        row = db.query(ExportFormatSetting).first()
+        if not row:
+            row = ExportFormatSetting(
+                heading_1_font=heading_1_font.strip() or None if heading_1_font is not None else None,
+                heading_1_size_pt=heading_1_size_pt,
+                heading_2_font=heading_2_font.strip() or None if heading_2_font is not None else None,
+                heading_2_size_pt=heading_2_size_pt,
+                heading_3_font=heading_3_font.strip() or None if heading_3_font is not None else None,
+                heading_3_size_pt=heading_3_size_pt,
+                body_font=body_font.strip() or None if body_font is not None else None,
+                body_size_pt=body_size_pt,
+                table_font=table_font.strip() or None if table_font is not None else None,
+                table_size_pt=table_size_pt,
+                first_line_indent_pt=first_line_indent_pt if first_line_indent_pt != 0 else None,
+                line_spacing=line_spacing,
+            )
+            db.add(row)
+        else:
+            if heading_1_font is not None:
+                row.heading_1_font = heading_1_font.strip() or None
+            if heading_1_size_pt is not None:
+                row.heading_1_size_pt = heading_1_size_pt
+            if heading_2_font is not None:
+                row.heading_2_font = heading_2_font.strip() or None
+            if heading_2_size_pt is not None:
+                row.heading_2_size_pt = heading_2_size_pt
+            if heading_3_font is not None:
+                row.heading_3_font = heading_3_font.strip() or None
+            if heading_3_size_pt is not None:
+                row.heading_3_size_pt = heading_3_size_pt
+            if body_font is not None:
+                row.body_font = body_font.strip() or None
+            if body_size_pt is not None:
+                row.body_size_pt = body_size_pt
+            if table_font is not None:
+                row.table_font = table_font.strip() or None
+            if table_size_pt is not None:
+                row.table_size_pt = table_size_pt
+            if first_line_indent_pt is not None:
+                row.first_line_indent_pt = first_line_indent_pt if first_line_indent_pt != 0 else None
+            if line_spacing is not None:
+                row.line_spacing = line_spacing
+        db.commit()
     finally:
         db.close()
 

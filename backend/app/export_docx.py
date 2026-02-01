@@ -2,10 +2,32 @@
 
 Uses markdown + beautifulsoup4 to parse Markdown, then python-docx to build the document.
 Handles # ## ### headings, - lists, paragraphs, **bold**, *italic*, tables (optional).
+Stage 7.2: supports format_options for heading/body/table font, first_line_indent, line_spacing.
+Word OOXML: font.name sets w:ascii/w:hAnsi (Latin); Chinese uses w:eastAsia, so we set both.
 """
 import markdown
 from bs4 import BeautifulSoup
 from docx import Document
+from docx.oxml import parse_xml
+from docx.oxml.ns import qn
+from docx.shared import Pt
+
+from app.settings_store import DEFAULT_EXPORT_FORMAT
+
+
+def _set_run_font_name(run, font_name: str) -> None:
+    """Set run font name for both Latin (ascii/hAnsi) and East Asian (eastAsia) so 中文 uses the same font."""
+    run.font.name = font_name
+    rPr = run._element.get_or_add_rPr()
+    rFonts = rPr.rFonts
+    if rFonts is not None:
+        rFonts.set(qn("w:eastAsia"), font_name)
+    else:
+        # Some python-docx versions don't create rFonts when setting name; create it for eastAsia
+        rFonts = parse_xml(
+            f'<w:rFonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:eastAsia="{font_name}"/>'
+        )
+        rPr.insert(0, rFonts)
 
 
 def _add_inline_to_paragraph(p, elem) -> None:
@@ -30,15 +52,139 @@ def _add_inline_to_paragraph(p, elem) -> None:
                 p.add_run(txt)
 
 
-def markdown_to_docx(markdown_text: str) -> Document:
+def _apply_heading_style(paragraph, level: int, opts: dict) -> None:
+    """Apply heading font/size from opts (heading_1/2/3) to paragraph runs; level 4-6 use heading_3."""
+    lvl = min(level, 3)
+    font_key = f"heading_{lvl}_font"
+    size_key = f"heading_{lvl}_size_pt"
+    font_name = opts.get(font_key)
+    size_pt = opts.get(size_key)
+    if font_name is None and size_pt is None:
+        return
+    for run in paragraph.runs:
+        if font_name is not None:
+            _set_run_font_name(run, font_name)
+        if size_pt is not None:
+            run.font.size = Pt(size_pt)
+
+
+def _apply_body_style(paragraph, opts: dict) -> None:
+    """Apply body font/size, first_line_indent, line_spacing to paragraph."""
+    font_name = opts.get("body_font")
+    size_pt = opts.get("body_size_pt")
+    for run in paragraph.runs:
+        if font_name is not None:
+            _set_run_font_name(run, font_name)
+        if size_pt is not None:
+            run.font.size = Pt(size_pt)
+    indent_pt = opts.get("first_line_indent_pt")
+    if indent_pt is not None:
+        paragraph.paragraph_format.first_line_indent = Pt(indent_pt)
+    spacing = opts.get("line_spacing")
+    if spacing is not None:
+        paragraph.paragraph_format.line_spacing = spacing
+
+
+def _apply_table_cell_style(cell, opts: dict) -> None:
+    """Apply table font/size to first paragraph runs in cell."""
+    font_name = opts.get("table_font")
+    size_pt = opts.get("table_size_pt")
+    if font_name is None and size_pt is None:
+        return
+    if not cell.paragraphs:
+        return
+    for run in cell.paragraphs[0].runs:
+        if font_name is not None:
+            _set_run_font_name(run, font_name)
+        if size_pt is not None:
+            run.font.size = Pt(size_pt)
+
+
+def _add_table_from_cell_texts(doc: Document, cell_texts: list[list[str]], opts: dict) -> None:
+    """Append a Word table to doc from cell_texts (list of rows, each row list of cell strings)."""
+    if not cell_texts:
+        return
+    max_cols = max(len(r) for r in cell_texts)
+    for r in cell_texts:
+        while len(r) < max_cols:
+            r.append("")
+    table = doc.add_table(rows=len(cell_texts), cols=max_cols)
+    table.style = "Table Grid"
+    for i, row_texts in enumerate(cell_texts):
+        for j, text in enumerate(row_texts):
+            table.rows[i].cells[j].text = text
+            _apply_table_cell_style(table.rows[i].cells[j], opts)
+
+
+def _add_table_from_soup(doc: Document, table_elem, opts: dict) -> None:
+    """Parse a BeautifulSoup <table> element and append a Word table to doc."""
+    rows = table_elem.find_all("tr")
+    if not rows:
+        return
+    cell_texts = []
+    for tr in rows:
+        cells = tr.find_all(["th", "td"])
+        cell_texts.append([c.get_text(strip=True) for c in cells])
+    _add_table_from_cell_texts(doc, cell_texts, opts)
+
+
+def _is_separator_row(cells: list[str]) -> bool:
+    """True if all cells look like markdown table separator (e.g. --- or :---)."""
+    if not cells:
+        return False
+    return all(c.strip().replace(":", "").replace("-", "").strip() == "" for c in cells)
+
+
+def _parse_raw_markdown_table(text: str) -> tuple[list[list[str]], str] | None:
+    """If text contains raw markdown table (pipes and dashes), return (cell_texts, leading_text); else None.
+
+    Handles tables that were inside code blocks (e.g. with a title line like "表2-1 ..." above).
+    leading_text is any content before the first table line (e.g. table caption), for caller to add as paragraph.
+    """
+    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+    if len(lines) < 2:
+        return None
+    start = 0
+    for i, line in enumerate(lines):
+        if "|" in line:
+            start = i
+            break
+    else:
+        return None
+    table_lines = lines[start:]
+    rows = []
+    for line in table_lines:
+        if "|" not in line:
+            break
+        cells = [c.strip() for c in line.split("|")]
+        if cells and cells[0] == "":
+            cells = cells[1:]
+        if cells and cells[-1] == "":
+            cells = cells[:-1]
+        if not cells:
+            continue
+        if _is_separator_row(cells):
+            continue
+        rows.append(cells)
+    if len(rows) < 1:
+        return None
+    leading_text = "\n".join(lines[:start]).strip() if start > 0 else ""
+    return (rows, leading_text)
+
+
+def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> Document:
     """Convert Markdown string to python-docx Document.
 
     Handles # ## ### headings, - lists, paragraphs, **bold**, *italic*, tables.
+    format_options: optional dict from get_export_format_config(); merged with DEFAULT_EXPORT_FORMAT.
     Returns a Document instance (call .save() to write to file).
     """
+    opts = {**DEFAULT_EXPORT_FORMAT, **(format_options or {})}
+
     if not markdown_text or not markdown_text.strip():
         doc = Document()
-        doc.add_paragraph("（无内容）")
+        p = doc.add_paragraph("（无内容）")
+        _apply_body_style(p, opts)
         return doc
 
     html = markdown.markdown(
@@ -57,14 +203,16 @@ def markdown_to_docx(markdown_text: str) -> Document:
             continue
         if elem.name in ("h1", "h2", "h3", "h4", "h5", "h6"):
             level = int(elem.name[1])
-            doc.add_heading(elem.get_text(strip=True), level=level)
+            p = doc.add_heading(elem.get_text(strip=True), level=level)
+            _apply_heading_style(p, level, opts)
         elif elem.name == "p":
             text = elem.get_text(strip=True)
             if text:
                 p = doc.add_paragraph()
                 _add_inline_to_paragraph(p, elem)
             else:
-                doc.add_paragraph()
+                p = doc.add_paragraph()
+            _apply_body_style(p, opts)
         elif elem.name in ("ul", "ol"):
             list_style = "List Bullet" if elem.name == "ul" else "List Number"
             for li in elem.find_all("li", recursive=False):
@@ -73,44 +221,58 @@ def markdown_to_docx(markdown_text: str) -> Document:
                     p = doc.add_paragraph(style=list_style)
                     _add_inline_to_paragraph(p, li)
                 else:
-                    doc.add_paragraph(style=list_style)
+                    p = doc.add_paragraph(style=list_style)
+                _apply_body_style(p, opts)
         elif elem.name == "table":
-            rows = elem.find_all("tr")
-            if rows:
-                cell_texts = []
-                for tr in rows:
-                    cells = tr.find_all(["th", "td"])
-                    cell_texts.append([c.get_text(strip=True) for c in cells])
-                if cell_texts:
-                    max_cols = max(len(r) for r in cell_texts)
-                    for r in cell_texts:
-                        while len(r) < max_cols:
-                            r.append("")
-                    table = doc.add_table(rows=len(cell_texts), cols=max_cols)
-                    table.style = "Table Grid"
-                    for i, row_texts in enumerate(cell_texts):
-                        for j, text in enumerate(row_texts):
-                            table.rows[i].cells[j].text = text
+            _add_table_from_soup(doc, elem, opts)
         elif elem.name == "hr":
-            doc.add_paragraph()
+            p = doc.add_paragraph()
+            _apply_body_style(p, opts)
         elif elem.name == "pre":
-            doc.add_paragraph(elem.get_text())
+            pre_text = elem.get_text()
+            parsed = _parse_raw_markdown_table(pre_text)
+            if parsed:
+                cell_texts, leading_text = parsed
+                if leading_text:
+                    p = doc.add_paragraph(leading_text)
+                    _apply_body_style(p, opts)
+                _add_table_from_cell_texts(doc, cell_texts, opts)
+            else:
+                p = doc.add_paragraph(pre_text)
+                _apply_body_style(p, opts)
         elif elem.name == "div":
             for sub in elem.children:
                 if hasattr(sub, "name") and sub.name:
                     if sub.name in ("h1", "h2", "h3", "h4", "h5", "h6"):
                         level = int(sub.name[1])
-                        doc.add_heading(sub.get_text(strip=True), level=level)
+                        p = doc.add_heading(sub.get_text(strip=True), level=level)
+                        _apply_heading_style(p, level, opts)
                     elif sub.name == "p":
                         text = sub.get_text(strip=True)
                         if text:
                             p = doc.add_paragraph()
                             _add_inline_to_paragraph(p, sub)
                         else:
-                            doc.add_paragraph()
+                            p = doc.add_paragraph()
+                        _apply_body_style(p, opts)
                     elif sub.name in ("ul", "ol"):
                         list_style = "List Bullet" if sub.name == "ul" else "List Number"
                         for li in sub.find_all("li", recursive=False):
-                            doc.add_paragraph(li.get_text(strip=True), style=list_style)
+                            p = doc.add_paragraph(li.get_text(strip=True), style=list_style)
+                            _apply_body_style(p, opts)
+                    elif sub.name == "table":
+                        _add_table_from_soup(doc, sub, opts)
+                    elif sub.name == "pre":
+                        pre_text = sub.get_text()
+                        parsed = _parse_raw_markdown_table(pre_text)
+                        if parsed:
+                            cell_texts, leading_text = parsed
+                            if leading_text:
+                                p = doc.add_paragraph(leading_text)
+                                _apply_body_style(p, opts)
+                            _add_table_from_cell_texts(doc, cell_texts, opts)
+                        else:
+                            p = doc.add_paragraph(pre_text)
+                            _apply_body_style(p, opts)
 
     return doc
