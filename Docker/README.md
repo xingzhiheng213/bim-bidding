@@ -7,7 +7,7 @@
 ## 前置要求
 
 - 已安装 [Docker](https://docs.docker.com/get-docker/) 与 [Docker Compose](https://docs.docker.com/compose/install/)（或 Docker Desktop 自带 Compose）
-- 本机 6379、5432、8000、8080 端口未被占用（可在 `.env` 中改 `FRONTEND_PORT`）
+- 本机 6379、5432、8001、8080 端口未被占用（可在 `.env` 中改 `FRONTEND_PORT`）
 
 ---
 
@@ -35,8 +35,8 @@ docker compose -f Docker/docker-compose.yml up -d --build
 启动完成后：
 
 - **前端页面**：浏览器打开 **http://localhost:8080**（端口以 `Docker/.env` 中 `FRONTEND_PORT` 为准）
-- **后端健康检查**：http://localhost:8000/health 应返回 `{"status":"ok"}`
-- **API 文档**：http://localhost:8000/docs
+- **后端健康检查**：http://localhost:8001/health 应返回 `{"status":"ok"}`
+- **API 文档**：http://localhost:8001/docs
 
 ---
 
@@ -46,7 +46,7 @@ docker compose -f Docker/docker-compose.yml up -d --build
 |----------|-------|------|
 | redis    | 6379  | Celery broker/backend |
 | postgres | 5432  | 业务数据库 |
-| backend  | 8000  | FastAPI 接口 |
+| backend  | 8001  | FastAPI 接口 |
 | celery   | —     | 异步任务（解析、LLM、按章生成等） |
 | frontend | 8080  | 前端静态（Nginx） |
 

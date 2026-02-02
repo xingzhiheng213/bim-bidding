@@ -14,5 +14,5 @@ COPY backend/ .
 # 数据目录（与 compose 中 volume 挂载一致）
 RUN mkdir -p /app/data/uploads /app/data/exports
 
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 8001
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]

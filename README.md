@@ -48,8 +48,8 @@ docker compose up -d --build
 ```
 
 - 前端：<http://localhost:8080>
-- 后端健康检查：<http://localhost:8000/health>
-- API 文档：<http://localhost:8000/docs>
+- 后端健康检查：<http://localhost:8001/health>
+- API 文档：<http://localhost:8001/docs>
 
 详见 [Docker/README.md](Docker/README.md)。
 

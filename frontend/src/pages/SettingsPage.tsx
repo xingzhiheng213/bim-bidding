@@ -142,7 +142,7 @@ function SettingsPage() {
             : '保存失败'
       const detail =
         msg === 'Network Error'
-          ? '无法连接后端，请确认后端已启动（默认 http://localhost:8000），并检查前端 VITE_API_BASE 与网络。'
+          ? '无法连接后端，请确认后端已启动（默认 http://localhost:8001），并检查前端 VITE_API_BASE 与网络。'
           : msg
       message.error(detail)
     },
@@ -164,7 +164,7 @@ function SettingsPage() {
         {isError && (
           <Text type="danger" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
             {error instanceof Error && error.message === 'Network Error'
-              ? '无法连接后端，请确认后端已启动（默认 http://localhost:8000），并检查前端 VITE_API_BASE 与网络。'
+              ? '无法连接后端，请确认后端已启动（默认 http://localhost:8001），并检查前端 VITE_API_BASE 与网络。'
               : error instanceof Error
                 ? error.message
                 : String(error)}

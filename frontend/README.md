@@ -11,9 +11,9 @@
 
 | 变量 | 说明 | 默认（开发） |
 |------|------|----------------|
-| `VITE_API_BASE` | 后端 API 根地址 | `http://localhost:8000` |
+| `VITE_API_BASE` | 后端 API 根地址 | `http://localhost:8001` |
 
-开发环境在 `frontend/.env.development` 中已配置 `VITE_API_BASE=http://localhost:8000`。若后端端口或主机不同，请修改该文件或新建 `.env.local` 覆盖。
+开发环境在 `frontend/.env.development` 中已配置 `VITE_API_BASE=http://localhost:8001`。若后端端口或主机不同，请修改该文件或新建 `.env.local` 覆盖。
 
 ## 本地运行
 
@@ -33,7 +33,7 @@ npm install
 npm run dev
 ```
 
-默认访问：<http://localhost:5173>。请确保后端已启动（`uvicorn app.main:app --reload --host 0.0.0.0 --port 8000`），页面会请求 `GET /health` 并显示「后端状态：ok」。
+默认访问：<http://localhost:5173>。请确保后端已启动（`uvicorn app.main:app --reload --host 0.0.0.0 --port 8001`），页面会请求 `GET /health` 并显示「后端状态：ok」。
 
 ### 3. 构建
 
