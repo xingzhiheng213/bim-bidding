@@ -12,7 +12,7 @@
 - **章节框架生成**：生成「第 X 章 标题」框架，可对接知识库检索；支持审核、重生成、添加要点后继续。
 - **按章生成**：按小节大纲逐章生成正文（二级/三级标题、段落、表格），支持单章重生成与要点补充。
 - **文档聚合与导出**：将各章 + 项目信息 + 风险点聚合为完整 Markdown，导出为 Word（DOCX）；支持代码块内表格转真实表格、中英文字体（含 eastAsia）配置。
-- **设置**：大模型 API Key（DeepSeek、智谱等）、各步骤模型选择、导出格式（标题/正文/表格字体字号、首行缩进、行距）。
+- **设置**：大模型 API Key（DeepSeek、智谱等）、各步骤模型选择、知识库（可选，RAGFlow/ThinkDoc）、导出格式（标题/正文/表格字体字号、首行缩进、行距）。
 - **对比**：从任务加载或粘贴两段文本，进行差异对比（标红标绿）。
 
 ---
@@ -53,41 +53,13 @@ docker compose up -d --build
 
 详见 [Docker/README.md](Docker/README.md)。
 
-### 方式二：本地开发
-
-1. **Redis、PostgreSQL** 已安装并启动（端口 6379、5432）。
-2. **后端**（在 `backend/` 下）：
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate   # Windows
-   pip install -r requirements.txt
-   copy .env.example .env   # 配置 REDIS_URL、DATABASE_URL 等
-   uvicorn app.main:app --reload
-   ```
-3. **Celery**（另开终端，同目录）：
-   ```bash
-   celery -A celery_app worker -l info -P solo
-   ```
-4. **前端**（在 `frontend/` 下）：
-   ```bash
-   npm install
-   npm run dev
-   ```
-   访问 <http://localhost:5173>。
-
-数据库表在**后端首次启动**时自动创建（`Base.metadata.create_all`），无需手动建表。  
-本地开发与办公环境迁移说明见：[各阶段指导/开发前-服务启动顺序.md](各阶段指导/开发前-服务启动顺序.md)、[各阶段指导/办公环境-数据库迁移与启动指南.md](各阶段指导/办公环境-数据库迁移与启动指南.md)。
-
 ---
 
 ## 项目结构
 
 ```
-├── backend/          # FastAPI + Celery，任务与步骤、解析、LLM、聚合、导出
+├── backend/          # FastAPI + Celery，任务与步骤、解析、LLM、知识库、聚合、导出
 ├── frontend/         # React + TypeScript，首页 / 任务详情 / 设置 / 对比
 ├── Docker/           # docker-compose、Dockerfile、nginx 配置
-├── 各阶段指导/       # 开发与操作指南（服务启动、数据库迁移、Git、UI 阶段等）
-├── 开发计划-分阶段.md
-├── UI设计计划-分阶段.md
-└── README-backend.md # 后端说明
+└── README.md
 ```
