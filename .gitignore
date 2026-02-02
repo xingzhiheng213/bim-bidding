@@ -8,6 +8,7 @@ backend/__pycache__/
 .eggs/
 
 # 敏感配置（不要提交 API Key、数据库密码等）
+.env
 backend/.env
 Docker/.env
 
@@ -22,6 +23,12 @@ frontend/dist/
 *.log
 .env.local
 .env.*.local
+
+# 开发/阶段文档（不提交到仓库）
+各阶段指导/
+*分阶段*.md
+README-backend.md
+Ragflowapi.md
 
 # 系统与编辑器
 .DS_Store

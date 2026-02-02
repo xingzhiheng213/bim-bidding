@@ -18,19 +18,19 @@
 ```bash
 cd Docker
 cp .env.example .env
-# 按需编辑 .env（如 POSTGRES_PASSWORD、VITE_API_BASE）
+# 按需编辑 .env（生产环境请修改 POSTGRES_PASSWORD；大模型 API Key 可在应用内「设置」页配置）
 docker compose up -d --build
 ```
 
 **方式二：在项目根目录执行**
 
 ```bash
-cp Docker/.env.example Docker/.env
-# 按需编辑 Docker/.env
+cp Docker/.env.example .env
+# 按需编辑项目根目录下的 .env（Compose 从当前目录读取 .env）
 docker compose -f Docker/docker-compose.yml up -d --build
 ```
 
-（方式二时，Compose 用于变量替换的 `.env` 默认取自当前目录；若需用 `Docker/.env` 做替换，请先 `cd Docker` 再执行 compose，即方式一。）
+（方式二时，`env_file` 相对于当前目录，故需将 `Docker/.env.example` 复制为**项目根目录**下的 `.env`；或使用方式一在 `Docker/` 下操作，只需一份 `.env`。）
 
 启动完成后：
 
@@ -77,8 +77,9 @@ docker compose -f Docker/docker-compose.yml logs -f frontend
 
 ## 配置说明
 
-- **环境变量**：在 `Docker/.env` 中修改；`POSTGRES_*`、`FRONTEND_PORT`、`VITE_API_BASE` 见 `Docker/.env.example` 注释。
-- **大模型 API Key**：可在 `Docker/.env` 中写 `DEEPSEEK_API_KEY`、`ZHIPU_API_KEY`，或在应用内「设置」页配置。构建时**不会**把 `backend/.env` 打进镜像（已用项目根 `.dockerignore` 排除），请勿依赖本机 backend/.env。
+- **环境变量**：在 `.env` 中修改（方式一为 `Docker/.env`，方式二为项目根 `.env`）；`POSTGRES_*`、`FRONTEND_PORT`、`VITE_API_BASE` 见 `Docker/.env.example` 注释。**生产环境请修改 `POSTGRES_PASSWORD`**；`.env` 勿提交到仓库（已由 `.gitignore` 排除）。
+- **大模型 API Key**：建议在应用内「设置」页配置，不写进 `.env` 更安全；若写在 `.env` 中，构建时**不会**打进镜像（`backend/.env`、`Docker/.env` 已用 `.dockerignore` 排除）。
+- **知识库（可选）**：默认不使用知识库。若需 RAGFlow，请**自行部署** RAGFlow，启动本应用后在「设置」页选择知识库类型 RAGFlow，填写 Base URL、API Key、Dataset IDs。后端在 Docker 内时，Base URL 填 `http://host.docker.internal:9380`（Windows/Mac）或 RAGFlow 所在主机/服务地址；也可使用 ThinkDoc 等云知识库并在设置页配置。
 - **CORS**：后端已根据 `FRONTEND_PORT` 允许 `http://localhost:8080`（或你设置的端口）；若前端通过其他地址访问，需在 backend 环境变量中设置 `CORS_ORIGINS`。
 
 ---

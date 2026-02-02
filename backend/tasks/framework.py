@@ -90,6 +90,10 @@ def run_framework(task_id: int) -> None:
         if not isinstance(bim_requirements, list):
             bim_requirements = []
         bim_requirements = [str(x) for x in bim_requirements]
+        scoring_items = params_output.get("scoring_items")
+        if not isinstance(scoring_items, list):
+            scoring_items = []
+        scoring_items = [str(x) for x in scoring_items if x]
 
         try:
             analyze_output = json.loads(analyze_step.output_snapshot)
@@ -130,6 +134,7 @@ def run_framework(task_id: int) -> None:
             context_text=context_text,
             extra_points=extra_points if extra_points else None,
             current_chapters=current_chapters if extra_points else None,
+            scoring_items=scoring_items,
         )
         from app.llm_resolver import get_llm_for_step
         provider, model = get_llm_for_step("framework")

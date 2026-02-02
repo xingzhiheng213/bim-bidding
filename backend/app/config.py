@@ -62,17 +62,27 @@ FRAMEWORK_LLM_MODEL: str = os.getenv("FRAMEWORK_LLM_MODEL", "deepseek-chat")
 CHAPTER_LLM_PROVIDER: str = os.getenv("CHAPTER_LLM_PROVIDER", "deepseek")
 CHAPTER_LLM_MODEL: str = os.getenv("CHAPTER_LLM_MODEL", "deepseek-chat")
 
+# Chapter outline/content: max chars of "招标要求参考" (stage 2.1 truncation)
+CHAPTER_OUTLINE_ANALYZE_MAX_LEN: int = int(os.getenv("CHAPTER_OUTLINE_ANALYZE_MAX_LEN", "8000"))
+CHAPTER_CONTENT_ANALYZE_MAX_LEN: int = int(os.getenv("CHAPTER_CONTENT_ANALYZE_MAX_LEN", "6000"))
+
 # Knowledge base (stage 2.4): thinkdoc | none; none or unset = return empty list
 # If THINKDOC_API_KEY and THINKDOC_KB_IDS are set but KNOWLEDGE_BASE_TYPE is not, default to thinkdoc
 THINKDOC_API_URL: str = os.getenv("THINKDOC_API_URL", "https://doc.bluedigit.ai").rstrip("/")
 THINKDOC_API_KEY: str = os.getenv("THINKDOC_API_KEY", "")
 # Single ID or comma-separated IDs, e.g. 69725828f7f898efad71e93c
 THINKDOC_KB_IDS_RAW: str = os.getenv("THINKDOC_KB_IDS", "")
+# RAGFlow: local or remote, e.g. http://localhost:9380
+RAGFLOW_API_URL: str = os.getenv("RAGFLOW_API_URL", "").strip().rstrip("/")
+RAGFLOW_API_KEY: str = os.getenv("RAGFLOW_API_KEY", "")
+RAGFLOW_DATASET_IDS_RAW: str = os.getenv("RAGFLOW_DATASET_IDS", "")
 _kb_type: str = os.getenv("KNOWLEDGE_BASE_TYPE", "").strip().lower()
 if _kb_type:
     KNOWLEDGE_BASE_TYPE: str = _kb_type
 elif THINKDOC_API_KEY and THINKDOC_KB_IDS_RAW.strip():
     KNOWLEDGE_BASE_TYPE = "thinkdoc"
+elif RAGFLOW_API_KEY and RAGFLOW_DATASET_IDS_RAW.strip():
+    KNOWLEDGE_BASE_TYPE = "ragflow"
 else:
     KNOWLEDGE_BASE_TYPE = "none"
 
@@ -82,6 +92,13 @@ def get_thinkdoc_kb_ids() -> list[str]:
     if not THINKDOC_KB_IDS_RAW.strip():
         return []
     return [x.strip() for x in THINKDOC_KB_IDS_RAW.split(",") if x.strip()]
+
+
+def get_ragflow_dataset_ids() -> list[str]:
+    """Return list of dataset IDs from RAGFLOW_DATASET_IDS (comma-separated)."""
+    if not RAGFLOW_DATASET_IDS_RAW.strip():
+        return []
+    return [x.strip() for x in RAGFLOW_DATASET_IDS_RAW.split(",") if x.strip()]
 
 
 def get_llm_api_key(provider: str) -> str | None:

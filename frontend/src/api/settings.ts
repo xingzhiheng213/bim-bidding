@@ -100,3 +100,55 @@ export async function postSettingsExportFormat(
   const { data } = await api.post<ExportFormatConfig>('/api/settings/export-format', body)
   return data
 }
+
+// --- Knowledge base (kb_type + RAGFlow config) ---
+
+export interface KnowledgeBaseConfig {
+  kb_type: string
+  ragflow_api_url: string | null
+  ragflow_configured: boolean
+  ragflow_masked_key: string | null
+  ragflow_dataset_ids: string
+}
+
+export interface PostKnowledgeBaseBody {
+  kb_type: 'none' | 'thinkdoc' | 'ragflow'
+  ragflow_api_url?: string | null
+  ragflow_api_key?: string | null
+  ragflow_dataset_ids?: string | null
+}
+
+export async function getSettingsKnowledgeBase(): Promise<KnowledgeBaseConfig> {
+  const { data } = await api.get<KnowledgeBaseConfig>('/api/settings/knowledge-base')
+  return data
+}
+
+export async function postSettingsKnowledgeBase(
+  body: PostKnowledgeBaseBody,
+): Promise<KnowledgeBaseConfig> {
+  const { data } = await api.post<KnowledgeBaseConfig>('/api/settings/knowledge-base', body)
+  return data
+}
+
+// --- Knowledge base connectivity test ---
+
+export interface TestKnowledgeBaseBody {
+  ragflow_api_url?: string | null
+  ragflow_api_key?: string | null
+  ragflow_dataset_ids?: string | null
+}
+
+export interface TestKnowledgeBaseResponse {
+  ok: boolean
+  message: string
+}
+
+export async function postSettingsKnowledgeBaseTest(
+  body: TestKnowledgeBaseBody,
+): Promise<TestKnowledgeBaseResponse> {
+  const { data } = await api.post<TestKnowledgeBaseResponse>(
+    '/api/settings/knowledge-base/test',
+    body,
+  )
+  return data
+}

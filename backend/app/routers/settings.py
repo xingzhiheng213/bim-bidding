@@ -4,13 +4,17 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.knowledge_base import test_ragflow_connection
 from app.model_registry import list_supported_models
 from app.settings_store import (
     get_all_providers_status,
     get_export_format_config,
+    get_kb_config,
     get_model_config,
+    get_ragflow_effective,
     set_api_key_in_db,
     set_export_format_config,
+    set_kb_config,
     set_model_config,
     update_base_url_in_db,
     SUPPORTED_PROVIDERS,
@@ -192,3 +196,60 @@ def post_settings_export_format(body: PostExportFormatBody):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return get_export_format_config()
+
+
+# --- Knowledge base (kb_type + RAGFlow config) ---
+
+
+class PostKnowledgeBaseBody(BaseModel):
+    """Knowledge base type and RAGFlow config; empty api_key = keep current."""
+
+    kb_type: Literal["none", "thinkdoc", "ragflow"] = Field(..., description="Knowledge base type")
+    ragflow_api_url: str | None = Field(None, description="RAGFlow base URL; omit to keep current")
+    ragflow_api_key: str | None = Field(None, description="RAGFlow API key; omit or empty to keep current")
+    ragflow_dataset_ids: str | None = Field(None, description="RAGFlow dataset IDs, comma-separated")
+
+
+@router.get("/knowledge-base")
+def get_settings_knowledge_base():
+    """Return kb_type and RAGFlow config (masked key only, no plain key)."""
+    return get_kb_config()
+
+
+@router.post("/knowledge-base")
+def post_settings_knowledge_base(body: PostKnowledgeBaseBody):
+    """Save kb_type and/or RAGFlow config; returns current config (same as GET)."""
+    try:
+        set_kb_config(
+            body.kb_type,
+            ragflow_api_url=body.ragflow_api_url,
+            ragflow_api_key=body.ragflow_api_key,
+            ragflow_dataset_ids=body.ragflow_dataset_ids,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return get_kb_config()
+
+
+class PostKnowledgeBaseTestBody(BaseModel):
+    """Optional RAGFlow params for connectivity test; omit = use saved config."""
+
+    ragflow_api_url: str | None = Field(None, description="RAGFlow base URL")
+    ragflow_api_key: str | None = Field(None, description="RAGFlow API key")
+    ragflow_dataset_ids: str | None = Field(None, description="RAGFlow dataset IDs, comma-separated")
+
+
+@router.post("/knowledge-base/test")
+def post_settings_knowledge_base_test(body: PostKnowledgeBaseTestBody):
+    """Test RAGFlow connectivity. Uses body values if provided, else saved config. Returns { ok, message }."""
+    base_url = (body.ragflow_api_url or "").strip() or None
+    api_key = (body.ragflow_api_key or "").strip() or None
+    if not base_url or not api_key:
+        effective = get_ragflow_effective()
+        if effective:
+            base_url = base_url or effective[0]
+            api_key = api_key or effective[1]
+    if not base_url or not api_key:
+        return {"ok": False, "message": "请填写 Base URL 和 API Key，或先保存知识库配置后再检测"}
+    ok, message = test_ragflow_connection(base_url, api_key)
+    return {"ok": ok, "message": message}

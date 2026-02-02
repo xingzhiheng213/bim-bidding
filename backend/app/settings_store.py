@@ -8,7 +8,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import LlmSetting, PlatformLlmConfig, ExportFormatSetting
+from app.models import LlmSetting, PlatformLlmConfig, ExportFormatSetting, KbSetting
 
 logger = logging.getLogger(__name__)
 
@@ -268,6 +268,117 @@ def set_export_format_config(
         db.commit()
     finally:
         db.close()
+
+
+# --- Knowledge base settings (single row: kb_type + RAGFlow config) ---
+
+VALID_KB_TYPES = ("none", "thinkdoc", "ragflow")
+
+
+def _kb_config_from_env() -> dict:
+    """Build kb_config dict from environment (used when no DB row)."""
+    from app import config
+    ragflow_ids = config.get_ragflow_dataset_ids()
+    return {
+        "kb_type": config.KNOWLEDGE_BASE_TYPE,
+        "ragflow_api_url": config.RAGFLOW_API_URL or None,
+        "ragflow_configured": bool(config.RAGFLOW_API_KEY and ragflow_ids),
+        "ragflow_masked_key": mask_api_key(config.RAGFLOW_API_KEY) if config.RAGFLOW_API_KEY else None,
+        "ragflow_dataset_ids": ",".join(ragflow_ids) if ragflow_ids else "",
+    }
+
+
+def get_kb_config() -> dict:
+    """Return kb_type and RAGFlow config (masked key only). From DB row or env default."""
+    from app import config
+    db: Session = SessionLocal()
+    try:
+        row = db.query(KbSetting).first()
+        if not row:
+            return _kb_config_from_env()
+        plain_key = decrypt_api_key(row.ragflow_encrypted_api_key) if row.ragflow_encrypted_api_key else None
+        has_url = bool(row.ragflow_api_url and (row.ragflow_api_url or "").strip())
+        has_ids = bool(row.ragflow_dataset_ids and (row.ragflow_dataset_ids or "").strip())
+        return {
+            "kb_type": row.kb_type or "none",
+            "ragflow_api_url": (row.ragflow_api_url or "").strip() or None,
+            "ragflow_configured": bool(has_url and plain_key and has_ids),
+            "ragflow_masked_key": mask_api_key(plain_key) if plain_key else None,
+            "ragflow_dataset_ids": (row.ragflow_dataset_ids or "").strip() or "",
+        }
+    except Exception as e:
+        logger.debug("get_kb_config fallback to env: %s", e)
+        return _kb_config_from_env()
+    finally:
+        db.close()
+
+
+def set_kb_config(
+    kb_type: str,
+    ragflow_api_url: str | None = None,
+    ragflow_api_key: str | None = None,
+    ragflow_dataset_ids: str | None = None,
+) -> None:
+    """Upsert single row of kb settings. Empty api_key = keep current; empty url/ids = clear or keep per existing."""
+    if kb_type not in VALID_KB_TYPES:
+        raise ValueError(f"kb_type must be one of {VALID_KB_TYPES}, got {kb_type!r}")
+    db: Session = SessionLocal()
+    try:
+        row = db.query(KbSetting).first()
+        now = datetime.utcnow()
+        if not row:
+            row = KbSetting(
+                kb_type=kb_type,
+                ragflow_api_url=ragflow_api_url.strip() or None if ragflow_api_url is not None else None,
+                ragflow_encrypted_api_key=encrypt_api_key(ragflow_api_key) if (ragflow_api_key and ragflow_api_key.strip()) else None,
+                ragflow_dataset_ids=ragflow_dataset_ids.strip() or None if ragflow_dataset_ids is not None else None,
+                updated_at=now,
+            )
+            db.add(row)
+        else:
+            row.kb_type = kb_type
+            row.updated_at = now
+            if ragflow_api_url is not None:
+                row.ragflow_api_url = ragflow_api_url.strip() or None
+            if ragflow_api_key is not None:
+                if ragflow_api_key.strip():
+                    row.ragflow_encrypted_api_key = encrypt_api_key(ragflow_api_key)
+                # else: keep current (do not clear)
+            if ragflow_dataset_ids is not None:
+                row.ragflow_dataset_ids = ragflow_dataset_ids.strip() or None
+        db.commit()
+    finally:
+        db.close()
+
+
+def get_ragflow_effective() -> tuple[str, str, list[str]] | None:
+    """Return (base_url, api_key, dataset_ids_list) for RAGFlow when kb_type=ragflow; DB first then env. None if not configured."""
+    from app import config
+    cfg = get_kb_config()
+    if cfg.get("kb_type") != "ragflow":
+        return None
+    db: Session = SessionLocal()
+    try:
+        row = db.query(KbSetting).first()
+        if row and row.kb_type == "ragflow" and row.ragflow_api_url and row.ragflow_encrypted_api_key and row.ragflow_dataset_ids:
+            plain = decrypt_api_key(row.ragflow_encrypted_api_key)
+            if plain:
+                ids_raw = (row.ragflow_dataset_ids or "").strip()
+                ids_list = [x.strip() for x in ids_raw.split(",") if x.strip()]
+                if ids_list:
+                    return ((row.ragflow_api_url or "").rstrip("/"), plain, ids_list)
+    except Exception as e:
+        logger.debug("get_ragflow_effective DB read failed: %s", e)
+    finally:
+        db.close()
+    # Fallback to env
+    if config.RAGFLOW_API_URL and config.RAGFLOW_API_KEY and config.get_ragflow_dataset_ids():
+        return (
+            config.RAGFLOW_API_URL.rstrip("/"),
+            config.RAGFLOW_API_KEY,
+            config.get_ragflow_dataset_ids(),
+        )
+    return None
 
 
 # --- Platform model config (default + per-step) ---

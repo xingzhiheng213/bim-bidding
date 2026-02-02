@@ -1,25 +1,44 @@
-"""Test knowledge base retrieval (stage 2.4). Run from backend/ with venv activated.
+"""Test knowledge base retrieval. Run from backend/ with venv activated.
 
-Requires KNOWLEDGE_BASE_TYPE=thinkdoc and THINKDOC_API_KEY、THINKDOC_KB_IDS in .env.
-If KNOWLEDGE_BASE_TYPE is none or unset, search() returns [] and this script reports 0 chunks.
+Uses effective kb_type from 设置页/DB (then env): thinkdoc 或 ragflow.
+- ThinkDoc: 需配置 THINKDOC_API_KEY、THINKDOC_KB_IDS（或设置页）.
+- RAGFlow: 需在设置页配置 Base URL、API Key、Dataset IDs（或对应环境变量）.
+
+用法:
+  python test_kb.py              # 默认查询 "BIM应用"，top_k=5
+  python test_kb.py "BIM施工应用" # 指定查询词
+  python test_kb.py "BIM施工应用" 10  # 指定查询词和 top_k
 """
 import os
+import sys
 
-# Ensure backend/ is cwd so app.config loads .env from here
+# Ensure backend/ is cwd so app.config and DB (settings) load from here
 _backend = os.path.dirname(os.path.abspath(__file__))
 os.chdir(_backend)
 
-from app import config
 from app.knowledge_base import search
+from app.settings_store import get_kb_config
 
 
 def main():
-    print("Knowledge base type:", config.KNOWLEDGE_BASE_TYPE)
-    if config.KNOWLEDGE_BASE_TYPE == "none":
-        print("KNOWLEDGE_BASE_TYPE is none; set THINKDOC_API_KEY and THINKDOC_KB_IDS (and optionally KNOWLEDGE_BASE_TYPE=thinkdoc) to test ThinkDoc.")
+    cfg = get_kb_config()
+    kb_type = (cfg.get("kb_type") or "none").strip().lower()
+    print("Knowledge base type (from 设置页/DB):", kb_type)
+
+    if kb_type == "none" or not kb_type:
+        print("当前未启用知识库。请在「设置」页选择知识库类型并配置：")
+        print("  - ThinkDoc：THINKDOC_API_KEY、THINKDOC_KB_IDS（或设置页）")
+        print("  - RAGFlow：Base URL、API Key、Dataset IDs（或设置页）")
         return
-    print("Query: BIM应用, top_k=5")
-    chunks = search("BIM应用", top_k=5)
+
+    query = (sys.argv[1] if len(sys.argv) > 1 else "BIM应用").strip() or "BIM应用"
+    try:
+        top_k = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+    except (ValueError, IndexError):
+        top_k = 5
+
+    print(f"Query: {query!r}, top_k={top_k}")
+    chunks = search(query, top_k=top_k)
     print("Chunks returned:", len(chunks))
     if chunks:
         for i, c in enumerate(chunks[:3]):
@@ -27,9 +46,14 @@ def main():
             print(f"  [{i+1}] {preview}")
         if len(chunks) > 3:
             print(f"  ... and {len(chunks) - 3} more")
-        print("OK")
+        print("OK — 检索正常，标书生成会使用上述知识库结果。")
     else:
-        print("No chunks (check THINKDOC_API_KEY, THINKDOC_KB_IDS and ThinkDoc service).")
+        print("No chunks。请检查：")
+        if kb_type == "ragflow":
+            print("  - 设置页 RAGFlow Base URL、API Key、Dataset IDs 是否正确")
+            print("  - 设置页「检测连通性」是否通过；知识库中是否有相关文档")
+        else:
+            print("  - ThinkDoc / RAGFlow 配置与对应服务是否可用；知识库中是否有相关文档")
 
 
 if __name__ == "__main__":

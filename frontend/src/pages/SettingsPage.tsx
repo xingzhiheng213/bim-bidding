@@ -4,9 +4,12 @@ import { Button, Card, Checkbox, Input, InputNumber, message, Select, Spin, Tag,
 import {
   type ExportFormatConfig,
   getSettingsExportFormat,
+  getSettingsKnowledgeBase,
   getSettingsLlm,
   getSettingsModels,
   postSettingsExportFormat,
+  postSettingsKnowledgeBase,
+  postSettingsKnowledgeBaseTest,
   postSettingsLlm,
   postSettingsModels,
 } from '../api/settings'
@@ -52,6 +55,10 @@ function SettingsPage() {
   const [inputByProvider, setInputByProvider] = useState<Record<string, string>>({})
   const [baseUrlByProvider, setBaseUrlByProvider] = useState<Record<string, string>>({})
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT)
+  const [kbType, setKbType] = useState<'none' | 'thinkdoc' | 'ragflow'>('none')
+  const [ragflowApiUrl, setRagflowApiUrl] = useState('')
+  const [ragflowApiKey, setRagflowApiKey] = useState('')
+  const [ragflowDatasetIds, setRagflowDatasetIds] = useState('')
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['settings', 'llm'],
@@ -72,6 +79,24 @@ function SettingsPage() {
     queryKey: ['settings', 'export-format'],
     queryFn: getSettingsExportFormat,
   })
+
+  const {
+    data: kbData,
+    isLoading: kbLoading,
+    isError: kbError,
+    error: kbErr,
+  } = useQuery({
+    queryKey: ['settings', 'knowledge-base'],
+    queryFn: getSettingsKnowledgeBase,
+  })
+
+  useEffect(() => {
+    if (kbData) {
+      setKbType((kbData.kb_type as 'none' | 'thinkdoc' | 'ragflow') || 'none')
+      setRagflowApiUrl(kbData.ragflow_api_url ?? '')
+      setRagflowDatasetIds(kbData.ragflow_dataset_ids ?? '')
+    }
+  }, [kbData])
 
   useEffect(() => {
     if (exportFormatData) {
@@ -150,6 +175,44 @@ function SettingsPage() {
 
   const getProviderStatus = (key: string) =>
     data?.providers?.find((p) => p.provider === key)
+
+  const saveKnowledgeBaseMutation = useMutation({
+    mutationFn: postSettingsKnowledgeBase,
+    onSuccess: () => {
+      message.success('知识库配置已保存')
+      setRagflowApiKey('')
+      queryClient.invalidateQueries({ queryKey: ['settings', 'knowledge-base'] })
+    },
+    onError: (e: unknown) => {
+      const detail =
+        e && typeof e === 'object' && 'response' in e && e.response && typeof e.response === 'object' && 'data' in e.response && e.response.data && typeof e.response.data === 'object' && 'detail' in e.response.data
+          ? String((e.response.data as { detail: unknown }).detail)
+          : e instanceof Error
+            ? e.message
+            : '保存失败'
+      message.error(detail)
+    },
+  })
+
+  const testKnowledgeBaseMutation = useMutation({
+    mutationFn: postSettingsKnowledgeBaseTest,
+    onSuccess: (res) => {
+      if (res.ok) {
+        message.success(res.message)
+      } else {
+        message.error(res.message)
+      }
+    },
+    onError: (e: unknown) => {
+      const msg =
+        e && typeof e === 'object' && 'response' in e && e.response && typeof e.response === 'object' && 'data' in e.response && e.response.data && typeof e.response.data === 'object' && 'message' in e.response.data
+          ? String((e.response.data as { message: unknown }).message)
+          : e instanceof Error
+            ? e.message
+            : '检测失败'
+      message.error(msg === 'Network Error' ? '无法连接后端，请确认后端已启动。' : msg)
+    },
+  })
 
   const contentMaxWidth = 640
 
@@ -337,6 +400,114 @@ function SettingsPage() {
                 </div>
               )
             })}
+          </div>
+        )}
+      </Card>
+
+      <Card title="知识库" style={{ marginBottom: designTokens.marginLG, width: '100%' }}>
+        {kbLoading && <Spin size="small" style={{ marginBottom: designTokens.marginSM }} />}
+        {kbError && (
+          <Text type="danger" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+            {kbErr instanceof Error ? kbErr.message : String(kbErr)}
+          </Text>
+        )}
+        {!kbLoading && (
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: designTokens.margin }}>
+              <div style={{ width: 100, minWidth: 100, flexShrink: 0 }}>
+                <Text strong>知识库类型</Text>
+              </div>
+              <Select
+                style={{ width: 200 }}
+                value={kbType}
+                onChange={(v) => setKbType(v ?? 'none')}
+                options={[
+                  { label: '不使用', value: 'none' },
+                  { label: 'ThinkDoc', value: 'thinkdoc' },
+                  { label: 'RAGFlow', value: 'ragflow' },
+                ]}
+              />
+            </div>
+            {kbType === 'thinkdoc' && (
+              <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                ThinkDoc 当前通过环境变量配置。
+              </Text>
+            )}
+            {kbType === 'none' && (
+              <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                未使用知识库检索。
+              </Text>
+            )}
+            {kbType === 'ragflow' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: designTokens.marginSM }}>
+                  <div style={{ width: 100, minWidth: 100, flexShrink: 0 }}>
+                    <Text>Base URL</Text>
+                  </div>
+                  <Input
+                    style={{ width: 360 }}
+                    placeholder="http://localhost:9380"
+                    value={ragflowApiUrl}
+                    onChange={(e) => setRagflowApiUrl(e.target.value)}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: designTokens.marginSM }}>
+                  <div style={{ width: 100, minWidth: 100, flexShrink: 0 }}>
+                    <Text>API Key</Text>
+                  </div>
+                  <Input.Password
+                    style={{ width: 360 }}
+                    placeholder="留空表示不修改"
+                    value={ragflowApiKey}
+                    onChange={(e) => setRagflowApiKey(e.target.value)}
+                  />
+                  {kbData?.ragflow_configured && kbData?.ragflow_masked_key && (
+                    <Text type="secondary" style={{ marginLeft: designTokens.marginSM }}>
+                      已配置：{kbData.ragflow_masked_key}
+                    </Text>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: designTokens.marginSM }}>
+                  <div style={{ width: 100, minWidth: 100, flexShrink: 0 }}>
+                    <Text>Dataset IDs</Text>
+                  </div>
+                  <Input
+                    style={{ width: 360 }}
+                    placeholder="逗号分隔的多个数据集 ID"
+                    value={ragflowDatasetIds}
+                    onChange={(e) => setRagflowDatasetIds(e.target.value)}
+                  />
+                </div>
+                <div style={{ marginTop: designTokens.margin, display: 'flex', alignItems: 'center', gap: designTokens.marginSM }}>
+                  <Button
+                    type="primary"
+                    loading={saveKnowledgeBaseMutation.isPending}
+                    onClick={() => {
+                      saveKnowledgeBaseMutation.mutate({
+                        kb_type: 'ragflow',
+                        ragflow_api_url: ragflowApiUrl || undefined,
+                        ragflow_api_key: ragflowApiKey.trim() || undefined,
+                        ragflow_dataset_ids: ragflowDatasetIds || undefined,
+                      })
+                    }}
+                  >
+                    保存
+                  </Button>
+                  <Button
+                    loading={testKnowledgeBaseMutation.isPending}
+                    onClick={() => {
+                      testKnowledgeBaseMutation.mutate({
+                        ragflow_api_url: ragflowApiUrl || undefined,
+                        ragflow_api_key: ragflowApiKey.trim() || undefined,
+                        ragflow_dataset_ids: ragflowDatasetIds || undefined,
+                      })
+                    }}
+                  >
+                    检测连通性
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </Card>

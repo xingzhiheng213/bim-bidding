@@ -129,6 +129,14 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
             project_info = params_out.get("project_info")
             if not isinstance(project_info, dict):
                 project_info = {}
+            risk_points = params_out.get("risk_points")
+            if not isinstance(risk_points, list):
+                risk_points = []
+            risk_points = [str(x) for x in risk_points if x]
+            scoring_items = params_out.get("scoring_items")
+            if not isinstance(scoring_items, list):
+                scoring_items = []
+            scoring_items = [str(x) for x in scoring_items if x]
         except (json.JSONDecodeError, TypeError):
             _set_chapters_failed(db, task_id, "参数步骤输出格式异常")
             return
@@ -163,7 +171,7 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
 
             try:
                 outline_messages = build_chapter_outline_messages(
-                    full_name, analyze_text, bim_requirements
+                    full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
                 )
                 outline_content = call_llm(
                     provider=provider,
@@ -187,6 +195,8 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
                     analyze_text=analyze_text,
                     bim_requirements=bim_requirements,
                     project_info=project_info,
+                    risk_points=risk_points,
+                    scoring_items=scoring_items,
                 )
                 chapter_content = call_llm(
                     provider=provider,
@@ -339,12 +349,20 @@ def regenerate_chapter(task_id: int, chapter_number: int) -> None:
                 project_info = params_out.get("project_info")
                 if not isinstance(project_info, dict):
                     project_info = {}
+                risk_points = params_out.get("risk_points")
+                if not isinstance(risk_points, list):
+                    risk_points = []
+                risk_points = [str(x) for x in risk_points if x]
+                scoring_items = params_out.get("scoring_items")
+                if not isinstance(scoring_items, list):
+                    scoring_items = []
+                scoring_items = [str(x) for x in scoring_items if x]
             except (json.JSONDecodeError, TypeError):
                 _set_chapters_failed(db, task_id, "参数步骤输出格式异常")
                 return
 
             outline_messages = build_chapter_outline_messages(
-                full_name, analyze_text, bim_requirements
+                full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
             )
             outline_content = call_llm(
                 provider=provider,
@@ -361,6 +379,8 @@ def regenerate_chapter(task_id: int, chapter_number: int) -> None:
                 analyze_text=analyze_text,
                 bim_requirements=bim_requirements,
                 project_info=project_info,
+                risk_points=risk_points,
+                scoring_items=scoring_items,
             )
             chapter_content = call_llm(
                 provider=provider,

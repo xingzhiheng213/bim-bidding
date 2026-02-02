@@ -50,7 +50,7 @@ def _extract_json_from_response(text: str) -> str:
 
 
 def _normalize_params(raw: dict) -> dict:
-    """Ensure project_info (dict), bim_requirements (list[str]), risk_points (list[str])."""
+    """Ensure project_info (dict), bim_requirements (list[str]), risk_points (list[str]), scoring_items (list[str])."""
     project_info = raw.get("project_info")
     if project_info is None:
         project_info = {}
@@ -72,10 +72,16 @@ def _normalize_params(raw: dict) -> dict:
         risk_points = []
     risk_points = [str(x) for x in risk_points]
 
+    scoring_items = raw.get("scoring_items")
+    if not isinstance(scoring_items, list):
+        scoring_items = []
+    scoring_items = [str(x) for x in scoring_items if x]
+
     return {
         "project_info": project_info,
         "bim_requirements": bim_requirements,
         "risk_points": risk_points,
+        "scoring_items": scoring_items,
     }
 
 
@@ -149,11 +155,12 @@ def run_params(task_id: int) -> None:
         params_step.error_message = None
         db.commit()
         logger.info(
-            "run_params: task_id=%s params completed, project_info keys=%s, bim=%s, risk=%s",
+            "run_params: task_id=%s params completed, project_info keys=%s, bim=%s, risk=%s, scoring=%s",
             task_id,
             len(normalized["project_info"]),
             len(normalized["bim_requirements"]),
             len(normalized["risk_points"]),
+            len(normalized["scoring_items"]),
         )
     except Exception as e:
         logger.exception("run_params: task_id=%s failed", task_id)
