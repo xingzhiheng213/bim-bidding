@@ -50,7 +50,8 @@ def _extract_json_from_response(text: str) -> str:
 
 
 def _normalize_params(raw: dict) -> dict:
-    """Ensure project_info (dict), bim_requirements (list[str]), risk_points (list[str]), scoring_items (list[str])."""
+    """Ensure project_info (dict), bim_requirements (list[str]), risk_points (list[str]), scoring_items (list[str]);
+    optional: construction_goals, standards_refs, deliverables (list[str] each)."""
     project_info = raw.get("project_info")
     if project_info is None:
         project_info = {}
@@ -77,11 +78,24 @@ def _normalize_params(raw: dict) -> dict:
         scoring_items = []
     scoring_items = [str(x) for x in scoring_items if x]
 
+    def _str_list(key: str) -> list[str]:
+        val = raw.get(key)
+        if not isinstance(val, list):
+            return []
+        return [str(x) for x in val if x]
+
+    construction_goals = _str_list("construction_goals")
+    standards_refs = _str_list("standards_refs")
+    deliverables = _str_list("deliverables")
+
     return {
         "project_info": project_info,
         "bim_requirements": bim_requirements,
         "risk_points": risk_points,
         "scoring_items": scoring_items,
+        "construction_goals": construction_goals,
+        "standards_refs": standards_refs,
+        "deliverables": deliverables,
     }
 
 

@@ -135,6 +135,14 @@ def _is_separator_row(cells: list[str]) -> bool:
     return all(c.strip().replace(":", "").replace("-", "").strip() == "" for c in cells)
 
 
+def _looks_like_table_row(text: str) -> bool:
+    """True if text looks like a markdown table row (starts with | and contains at least one more |)."""
+    if not text or not text.strip():
+        return False
+    t = text.strip()
+    return t.startswith("|") and "|" in t[1:]
+
+
 def _parse_raw_markdown_table(text: str) -> tuple[list[list[str]], str] | None:
     """If text contains raw markdown table (pipes and dashes), return (cell_texts, leading_text); else None.
 
@@ -195,11 +203,13 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
 
     doc = Document()
     root = soup.find("body") or soup
+    children = [c for c in root.children if hasattr(c, "name") and c.name is not None]
+    skip_until = -1
 
-    for elem in root.children:
-        if not hasattr(elem, "name"):
+    for i, elem in enumerate(children):
+        if i <= skip_until:
             continue
-        if elem.name is None:
+        if not hasattr(elem, "name") or elem.name is None:
             continue
         if elem.name in ("h1", "h2", "h3", "h4", "h5", "h6"):
             level = int(elem.name[1])
@@ -207,6 +217,31 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
             _apply_heading_style(p, level, opts)
         elif elem.name == "p":
             text = elem.get_text(strip=True)
+            if _looks_like_table_row(text):
+                lines = [text]
+                j = i + 1
+                while j < len(children):
+                    next_elem = children[j]
+                    if getattr(next_elem, "name", None) != "p":
+                        break
+                    next_text = next_elem.get_text(strip=True)
+                    if not next_text:
+                        j += 1
+                        continue
+                    if not _looks_like_table_row(next_text):
+                        break
+                    lines.append(next_text)
+                    j += 1
+                block = "\n".join(lines)
+                parsed = _parse_raw_markdown_table(block)
+                if parsed:
+                    cell_texts, leading_text = parsed
+                    if leading_text:
+                        p = doc.add_paragraph(leading_text)
+                        _apply_body_style(p, opts)
+                    _add_table_from_cell_texts(doc, cell_texts, opts)
+                    skip_until = j - 1
+                    continue
             if text:
                 p = doc.add_paragraph()
                 _add_inline_to_paragraph(p, elem)
@@ -241,38 +276,66 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
                 p = doc.add_paragraph(pre_text)
                 _apply_body_style(p, opts)
         elif elem.name == "div":
-            for sub in elem.children:
-                if hasattr(sub, "name") and sub.name:
-                    if sub.name in ("h1", "h2", "h3", "h4", "h5", "h6"):
-                        level = int(sub.name[1])
-                        p = doc.add_heading(sub.get_text(strip=True), level=level)
-                        _apply_heading_style(p, level, opts)
-                    elif sub.name == "p":
-                        text = sub.get_text(strip=True)
-                        if text:
-                            p = doc.add_paragraph()
-                            _add_inline_to_paragraph(p, sub)
-                        else:
-                            p = doc.add_paragraph()
-                        _apply_body_style(p, opts)
-                    elif sub.name in ("ul", "ol"):
-                        list_style = "List Bullet" if sub.name == "ul" else "List Number"
-                        for li in sub.find_all("li", recursive=False):
-                            p = doc.add_paragraph(li.get_text(strip=True), style=list_style)
-                            _apply_body_style(p, opts)
-                    elif sub.name == "table":
-                        _add_table_from_soup(doc, sub, opts)
-                    elif sub.name == "pre":
-                        pre_text = sub.get_text()
-                        parsed = _parse_raw_markdown_table(pre_text)
+            div_children = [c for c in elem.children if hasattr(c, "name") and c.name]
+            div_skip_until = -1
+            for idx, sub in enumerate(div_children):
+                if idx <= div_skip_until:
+                    continue
+                if sub.name in ("h1", "h2", "h3", "h4", "h5", "h6"):
+                    level = int(sub.name[1])
+                    p = doc.add_heading(sub.get_text(strip=True), level=level)
+                    _apply_heading_style(p, level, opts)
+                elif sub.name == "p":
+                    text = sub.get_text(strip=True)
+                    if _looks_like_table_row(text):
+                        lines = [text]
+                        k = idx + 1
+                        while k < len(div_children):
+                            next_sub = div_children[k]
+                            if getattr(next_sub, "name", None) != "p":
+                                break
+                            next_text = next_sub.get_text(strip=True)
+                            if not next_text:
+                                k += 1
+                                continue
+                            if not _looks_like_table_row(next_text):
+                                break
+                            lines.append(next_text)
+                            k += 1
+                        block = "\n".join(lines)
+                        parsed = _parse_raw_markdown_table(block)
                         if parsed:
                             cell_texts, leading_text = parsed
                             if leading_text:
                                 p = doc.add_paragraph(leading_text)
                                 _apply_body_style(p, opts)
                             _add_table_from_cell_texts(doc, cell_texts, opts)
-                        else:
-                            p = doc.add_paragraph(pre_text)
+                            div_skip_until = k - 1
+                            continue
+                    if text:
+                        p = doc.add_paragraph()
+                        _add_inline_to_paragraph(p, sub)
+                    else:
+                        p = doc.add_paragraph()
+                    _apply_body_style(p, opts)
+                elif sub.name in ("ul", "ol"):
+                    list_style = "List Bullet" if sub.name == "ul" else "List Number"
+                    for li in sub.find_all("li", recursive=False):
+                        p = doc.add_paragraph(li.get_text(strip=True), style=list_style)
+                        _apply_body_style(p, opts)
+                elif sub.name == "table":
+                    _add_table_from_soup(doc, sub, opts)
+                elif sub.name == "pre":
+                    pre_text = sub.get_text()
+                    parsed = _parse_raw_markdown_table(pre_text)
+                    if parsed:
+                        cell_texts, leading_text = parsed
+                        if leading_text:
+                            p = doc.add_paragraph(leading_text)
                             _apply_body_style(p, opts)
+                        _add_table_from_cell_texts(doc, cell_texts, opts)
+                    else:
+                        p = doc.add_paragraph(pre_text)
+                        _apply_body_style(p, opts)
 
     return doc
