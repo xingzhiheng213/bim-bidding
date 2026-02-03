@@ -5,6 +5,7 @@ Handles # ## ### headings, - lists, paragraphs, **bold**, *italic*, tables (opti
 Stage 7.2: supports format_options for heading/body/table font, first_line_indent, line_spacing.
 Word OOXML: font.name sets w:ascii/w:hAnsi (Latin); Chinese uses w:eastAsia, so we set both.
 """
+import re
 import markdown
 from bs4 import BeautifulSoup
 from docx import Document
@@ -142,6 +143,199 @@ def _looks_like_table_row(text: str) -> bool:
     t = text.strip()
     return t.startswith("|") and "|" in t[1:]
 
+def _split_md_table_cells(line: str) -> list[str]:
+    """Split a markdown pipe-table row into cells (strip outer pipes and whitespace)."""
+    cells = [c.strip() for c in line.strip().split("|")]
+    if cells and cells[0] == "":
+        cells = cells[1:]
+    if cells and cells[-1] == "":
+        cells = cells[:-1]
+    return cells
+
+
+def _is_md_table_separator_line(line: str) -> bool:
+    """Return True if line looks like a markdown table separator row."""
+    if not line or "|" not in line:
+        return False
+    cells = _split_md_table_cells(line)
+    return _is_separator_row(cells)
+
+
+def _preprocess_markdown_tables(markdown_text: str) -> str:
+    """Normalize markdown pipe tables to make parsers robust.
+
+    Key goals:
+    - Only treat a region as a table if it has a header row AND a separator row (--- / :--- etc).
+      This avoids misclassifying normal text with '|' as a table.
+    - Remove blank lines INSIDE the table (between header/separator/body rows), as blank lines
+      terminate tables in common markdown parsers (Pandoc/GFM/Python-Markdown).
+    - Ensure there is a blank line BEFORE a table block when it directly follows text.
+    - Do NOT touch anything inside fenced code blocks (```), where '|' may appear in examples.
+    """
+    if not markdown_text:
+        return markdown_text
+
+    lines = markdown_text.splitlines()
+    out: list[str] = []
+    i = 0
+    in_fence = False
+
+    def _is_fence(line: str) -> bool:
+        s = line.lstrip()
+        return s.startswith("```")
+
+    def _is_md_table_row_line(line: str) -> bool:
+        s = line.strip()
+        # Stronger than just containing '|': require starting with '|' and at least 2 pipes total.
+        return s.startswith("|") and s.count("|") >= 2
+
+    while i < len(lines):
+        line = lines[i]
+
+        # Track fenced code blocks; do not preprocess inside.
+        if _is_fence(line):
+            in_fence = not in_fence
+            out.append(line)
+            i += 1
+            continue
+        if in_fence:
+            out.append(line)
+            i += 1
+            continue
+
+        # Try to detect a table starting at i: header row + separator row (allow blank lines between).
+        if _is_md_table_row_line(line):
+            header_cells = _split_md_table_cells(line)
+            # Need at least 2 columns to be a table.
+            if len(header_cells) >= 2:
+                j = i + 1
+                # Allow blank lines between header and separator (common "bad" output).
+                while j < len(lines) and not lines[j].strip():
+                    j += 1
+                if j < len(lines) and _is_md_table_separator_line(lines[j]):
+                    sep_cells = _split_md_table_cells(lines[j])
+                    # Separator column count must match header.
+                    if len(sep_cells) == len(header_cells):
+                        # Ensure blank line BEFORE table (if previous output line is non-empty)
+                        if out and out[-1].strip():
+                            out.append("")
+
+                        # Emit header + separator
+                        out.append("| " + " | ".join(header_cells) + " |")
+                        out.append("|" + "|".join(["---"] * len(header_cells)) + "|")
+
+                        # Emit body rows: collect subsequent table rows; ignore blank lines between.
+                        k = j + 1
+                        while k < len(lines):
+                            if _is_fence(lines[k]):
+                                break
+                            if not lines[k].strip():
+                                k += 1
+                                continue
+                            if not _is_md_table_row_line(lines[k]):
+                                break
+                            row_cells = _split_md_table_cells(lines[k])
+                            # Keep only rows with matching column count; otherwise stop (avoid consuming text).
+                            if len(row_cells) != len(header_cells):
+                                break
+                            out.append("| " + " | ".join(row_cells) + " |")
+                            k += 1
+
+                        # Ensure a blank line AFTER table if next output would stick to it.
+                        if k < len(lines) and lines[k].strip():
+                            out.append("")
+
+                        i = k
+                        continue
+
+        # Default: passthrough line as-is
+        out.append(line)
+        i += 1
+
+    return "\n".join(out)
+
+
+def _strip_bold_in_string(s: str) -> str:
+    """Remove Markdown bold (**...** and __...__) from a string. Repeats until no change (handles adjacent/nested)."""
+    if not s:
+        return s
+    prev = None
+    while prev != s:
+        prev = s
+        s = re.sub(r"\*\*(.+?)\*\*", r"\1", s)
+        s = re.sub(r"__(.+?)__", r"\1", s)
+    return s
+
+
+def _get_table_line_indices(lines: list[str]) -> set[int]:
+    """Return set of line indices that belong to a pipe table block (header + separator + body).
+    Used so we do NOT strip bold inside table cells. Fenced code blocks are not treated as tables.
+    """
+    table_indices: set[int] = set()
+    i = 0
+    in_fence = False
+
+    def _is_fence(line: str) -> bool:
+        return line.lstrip().startswith("```")
+
+    def _is_md_table_row_line(line: str) -> bool:
+        t = line.strip()
+        return t.startswith("|") and t.count("|") >= 2
+
+    while i < len(lines):
+        line = lines[i]
+        if _is_fence(line):
+            in_fence = not in_fence
+            i += 1
+            continue
+        if in_fence:
+            i += 1
+            continue
+        if _is_md_table_row_line(line):
+            header_cells = _split_md_table_cells(line)
+            if len(header_cells) >= 2:
+                j = i + 1
+                while j < len(lines) and not lines[j].strip():
+                    j += 1
+                if j < len(lines) and _is_md_table_separator_line(lines[j]):
+                    sep_cells = _split_md_table_cells(lines[j])
+                    if len(sep_cells) == len(header_cells):
+                        table_indices.add(i)
+                        table_indices.add(j)
+                        k = j + 1
+                        while k < len(lines):
+                            if _is_fence(lines[k]):
+                                break
+                            if not lines[k].strip():
+                                k += 1
+                                continue
+                            if not _is_md_table_row_line(lines[k]):
+                                break
+                            row_cells = _split_md_table_cells(lines[k])
+                            if len(row_cells) != len(header_cells):
+                                break
+                            table_indices.add(k)
+                            k += 1
+                        i = k
+                        continue
+        i += 1
+    return table_indices
+
+
+def _strip_bold_outside_tables(markdown_text: str) -> str:
+    """Remove ** and __ bold from lines that are NOT inside a pipe table block. Keeps bold in table cells (e.g. 合计)."""
+    if not markdown_text:
+        return markdown_text
+    lines = markdown_text.splitlines()
+    table_indices = _get_table_line_indices(lines)
+    out = []
+    for i, line in enumerate(lines):
+        if i in table_indices:
+            out.append(line)
+        else:
+            out.append(_strip_bold_in_string(line))
+    return "\n".join(out)
+
 
 def _parse_raw_markdown_table(text: str) -> tuple[list[list[str]], str] | None:
     """If text contains raw markdown table (pipes and dashes), return (cell_texts, leading_text); else None.
@@ -194,6 +388,11 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
         p = doc.add_paragraph("（无内容）")
         _apply_body_style(p, opts)
         return doc
+
+    # Preprocess markdown tables to avoid blank-line table breakage.
+    markdown_text = _preprocess_markdown_tables(markdown_text)
+    # Strip bold in body/headings; keep bold only inside table cells.
+    markdown_text = _strip_bold_outside_tables(markdown_text)
 
     html = markdown.markdown(
         markdown_text,
