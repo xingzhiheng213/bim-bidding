@@ -25,6 +25,7 @@ frontend/dist/
 .env.*.local
 
 # 开发/阶段文档（不提交到仓库）
+docs/
 各阶段指导/
 *分阶段*.md
 README-backend.md
