@@ -27,10 +27,20 @@ export async function postSettingsLlm(
   provider: string,
   apiKey: string | undefined,
   baseUrl: string | undefined,
+  options?: { clear?: boolean },
 ): Promise<PostSettingsLlmResponse> {
-  const body: { provider: string; api_key?: string; base_url?: string } = { provider }
-  if (apiKey != null && apiKey.trim() !== '') body.api_key = apiKey.trim()
-  if (baseUrl !== undefined) body.base_url = baseUrl
+  const body: {
+    provider: string
+    api_key?: string
+    base_url?: string
+    clear?: boolean
+  } = { provider }
+  if (options?.clear) {
+    body.clear = true
+  } else {
+    if (apiKey != null && apiKey.trim() !== '') body.api_key = apiKey.trim()
+    if (baseUrl !== undefined) body.base_url = baseUrl
+  }
   const { data } = await api.post<PostSettingsLlmResponse>('/api/settings/llm', body)
   return data
 }
@@ -87,6 +97,17 @@ export interface ExportFormatConfig {
   table_size_pt?: number
   first_line_indent_pt?: number
   line_spacing?: number
+}
+
+export interface GetSettingsExportFormatFontsResponse {
+  fonts: string[]
+}
+
+export async function getSettingsExportFormatFonts(): Promise<string[]> {
+  const { data } = await api.get<GetSettingsExportFormatFontsResponse>(
+    '/api/settings/export-format-fonts',
+  )
+  return data.fonts
 }
 
 export async function getSettingsExportFormat(): Promise<ExportFormatConfig> {

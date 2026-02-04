@@ -46,6 +46,8 @@ def call_llm(
         "model": model,
         "messages": messages,
         "temperature": temperature,
+        # 默认允许最多 8K tokens 输出，可通过环境变量 LLM_MAX_TOKENS 调整
+        "max_tokens": config.LLM_MAX_TOKENS,
     }
     headers = {
         "Authorization": f"Bearer {key}",

@@ -53,6 +53,20 @@ async def startup():
         else:
             logger.warning("Could not add output_snapshot_before_regenerate: %s", e)
 
+    # Add name to tasks if missing (task naming)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE tasks ADD COLUMN name VARCHAR(255)"
+            ))
+            conn.commit()
+        logger.info("Added column name to tasks")
+    except Exception as e:
+        if "already exists" in str(e).lower() or "duplicate" in str(e).lower():
+            logger.debug("Column name already exists")
+        else:
+            logger.warning("Could not add name to tasks: %s", e)
+
 
 @app.get("/health")
 def health():

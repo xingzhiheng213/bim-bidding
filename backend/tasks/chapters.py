@@ -49,6 +49,144 @@ def _set_chapters_failed(db: Session, task_id: int, error_message: str) -> None:
     db.commit()
 
 
+def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int) -> None:
+    """Sync: regenerate one chapter using current chapter_points; updates snapshot only, does not change step status.
+    Caller must set chapters_step.status = 'running' before and 'completed'/'failed' after.
+    """
+    chapters_step = _get_or_create_chapters_step(db, task_id)
+    if not chapters_step.output_snapshot:
+        raise ValueError("按章生成步骤无输出")
+    try:
+        out = json.loads(chapters_step.output_snapshot)
+    except (json.JSONDecodeError, TypeError):
+        raise ValueError("按章生成步骤输出格式异常")
+    chapters_dict = out.get("chapters")
+    if not isinstance(chapters_dict, dict) or str(chapter_number) not in chapters_dict:
+        raise ValueError(f"第{chapter_number}章不存在")
+    current_content = chapters_dict.get(str(chapter_number)) or ""
+
+    framework_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "framework")
+        .first()
+    )
+    if not framework_step or framework_step.status != "completed" or not framework_step.output_snapshot:
+        raise ValueError("请先完成框架")
+    try:
+        fw_out = json.loads(framework_step.output_snapshot)
+    except (json.JSONDecodeError, TypeError):
+        raise ValueError("框架步骤输出格式异常")
+    chapters_list = fw_out.get("chapters")
+    if not isinstance(chapters_list, list):
+        raise ValueError("框架无章节列表")
+    ch_info = next((c for c in chapters_list if c.get("number") == chapter_number), None)
+    full_name = (ch_info.get("full_name") if ch_info else f"第{chapter_number}章") or f"第{chapter_number}章"
+
+    chapter_points: list[str] = []
+    cp = out.get("chapter_points")
+    if isinstance(cp, dict) and str(chapter_number) in cp:
+        pts = cp[str(chapter_number)]
+        if isinstance(pts, list):
+            chapter_points = [str(p) for p in pts if p]
+
+    from app.llm_resolver import get_llm_for_step
+    provider, model = get_llm_for_step("chapters")
+
+    if chapter_points:
+        messages = build_chapter_regenerate_messages(
+            chapter_full_name=full_name,
+            current_content=current_content,
+            added_points=chapter_points,
+        )
+        chapter_content = call_llm(
+            provider=provider,
+            model=model,
+            messages=messages,
+            temperature=CHAPTER_REGENERATE_TEMPERATURE,
+        )
+    else:
+        analyze_step = (
+            db.query(TaskStep)
+            .filter(TaskStep.task_id == task_id, TaskStep.step_key == "analyze")
+            .first()
+        )
+        params_step = (
+            db.query(TaskStep)
+            .filter(TaskStep.task_id == task_id, TaskStep.step_key == "params")
+            .first()
+        )
+        if not analyze_step or not params_step or analyze_step.status != "completed" or params_step.status != "completed":
+            raise ValueError("请先完成分析和参数提取")
+        try:
+            analyze_out = json.loads(analyze_step.output_snapshot)
+            analyze_text = str(analyze_out.get("text", ""))
+        except (json.JSONDecodeError, TypeError):
+            raise ValueError("分析步骤输出格式异常")
+        try:
+            params_out = json.loads(params_step.output_snapshot)
+            bim_requirements = params_out.get("bim_requirements") or []
+            bim_requirements = [str(x) for x in bim_requirements] if isinstance(bim_requirements, list) else []
+            project_info = params_out.get("project_info") or {}
+            project_info = project_info if isinstance(project_info, dict) else {}
+            risk_points = params_out.get("risk_points") or []
+            risk_points = [str(x) for x in risk_points if x] if isinstance(risk_points, list) else []
+            scoring_items = params_out.get("scoring_items") or []
+            scoring_items = [str(x) for x in scoring_items] if isinstance(scoring_items, list) else []
+        except (json.JSONDecodeError, TypeError):
+            raise ValueError("参数步骤输出格式异常")
+
+        outline_messages = build_chapter_outline_messages(
+            full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
+        )
+        outline_content = call_llm(
+            provider=provider,
+            model=model,
+            messages=outline_messages,
+            temperature=CHAPTER_OUTLINE_TEMPERATURE,
+        )
+        context_chunks = kb_search(query=full_name, top_k=KB_TOP_K)
+        context_text = "\n\n".join(context_chunks) if context_chunks else ""
+        content_messages = build_chapter_content_messages(
+            chapter_full_name=full_name,
+            outline_text=outline_content,
+            context_text=context_text,
+            analyze_text=analyze_text,
+            bim_requirements=bim_requirements,
+            project_info=project_info,
+            risk_points=risk_points,
+            scoring_items=scoring_items,
+        )
+        chapter_content = call_llm(
+            provider=provider,
+            model=model,
+            messages=content_messages,
+            temperature=CHAPTER_CONTENT_TEMPERATURE,
+        )
+
+    chapters_step = _get_or_create_chapters_step(db, task_id)
+    before_regenerate = {}
+    if chapters_step.output_snapshot_before_regenerate:
+        try:
+            before_regenerate = json.loads(chapters_step.output_snapshot_before_regenerate)
+            if not isinstance(before_regenerate, dict):
+                before_regenerate = {}
+        except (json.JSONDecodeError, TypeError):
+            before_regenerate = {}
+    before_regenerate[str(chapter_number)] = current_content
+    chapters_step.output_snapshot_before_regenerate = json.dumps(before_regenerate, ensure_ascii=False)
+    try:
+        out = json.loads(chapters_step.output_snapshot or "{}")
+    except (json.JSONDecodeError, TypeError):
+        out = {}
+    if not isinstance(out.get("chapters"), dict):
+        out["chapters"] = {}
+    out["chapters"][str(chapter_number)] = chapter_content
+    out.pop("current", None)
+    chapters_step.output_snapshot = json.dumps(out, ensure_ascii=False)
+    db.commit()
+    logger.info("_regenerate_one_chapter_impl: task_id=%s chapter %s done", task_id, chapter_number)
+
+
 @app.task
 def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None:
     """Generate chapter content for selected framework chapters.
@@ -249,10 +387,7 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
 @app.task
 def regenerate_chapter(task_id: int, chapter_number: int) -> None:
     """Re-generate a single chapter. Reads current content + chapter_points; only updates that chapter.
-
-    If chapter_points exist: use 'current content + user points' prompt (stage 4.1.1).
-    If no points: use full outline + content flow (fallback).
-    On success: write back to chapters[str(chapter_number)], status=completed; on failure: status=failed.
+    Uses _regenerate_one_chapter_impl for the actual work.
     """
     db: Session = SessionLocal()
     try:
@@ -265,16 +400,69 @@ def regenerate_chapter(task_id: int, chapter_number: int) -> None:
         if not chapters_step.output_snapshot:
             _set_chapters_failed(db, task_id, "按章生成步骤无输出")
             return
+        chapters_step.status = "running"
+        chapters_step.error_message = None
+        db.commit()
+
+        _regenerate_one_chapter_impl(db, task_id, chapter_number)
+
+        chapters_step = _get_or_create_chapters_step(db, task_id)
+        chapters_step.status = "completed"
+        chapters_step.error_message = None
+        db.commit()
+        logger.info("regenerate_chapter: task_id=%s chapter %s done", task_id, chapter_number)
+    except Exception as e:
+        logger.exception("regenerate_chapter: task_id=%s chapter %s failed", task_id, chapter_number)
         try:
-            out = json.loads(chapters_step.output_snapshot)
+            db.rollback()
+            _set_chapters_failed(db, task_id, str(e)[:ERROR_MESSAGE_MAX_LEN])
+        except Exception:
+            db.rollback()
+            raise
+    finally:
+        db.close()
+
+
+@app.task
+def regenerate_all_chapters_from_review(task_id: int) -> None:
+    """Regenerate all chapters sequentially using review output as chapter_points.
+    For each chapter (in order): set chapter_points from review items, then call _regenerate_one_chapter_impl.
+    Does not run chapters in parallel to respect API limits.
+    """
+    db: Session = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            logger.warning("regenerate_all_chapters_from_review: task_id=%s not found", task_id)
+            return
+
+        chapters_step = (
+            db.query(TaskStep)
+            .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")
+            .first()
+        )
+        if not chapters_step or chapters_step.status != "completed" or not chapters_step.output_snapshot:
+            _set_chapters_failed(db, task_id, "请先完成按章生成")
+            return
+
+        review_step = (
+            db.query(TaskStep)
+            .filter(TaskStep.task_id == task_id, TaskStep.step_key == "review")
+            .first()
+        )
+        if not review_step or review_step.status != "completed" or not review_step.output_snapshot:
+            _set_chapters_failed(db, task_id, "请先完成校审")
+            return
+
+        try:
+            review_out = json.loads(review_step.output_snapshot)
         except (json.JSONDecodeError, TypeError):
-            _set_chapters_failed(db, task_id, "按章生成步骤输出格式异常")
+            _set_chapters_failed(db, task_id, "校审步骤输出格式异常")
             return
-        chapters_dict = out.get("chapters")
-        if not isinstance(chapters_dict, dict) or str(chapter_number) not in chapters_dict:
-            _set_chapters_failed(db, task_id, f"第{chapter_number}章不存在")
+        review_chapters = review_out.get("chapters")
+        if not isinstance(review_chapters, dict):
+            _set_chapters_failed(db, task_id, "校审无章节数据")
             return
-        current_content = chapters_dict.get(str(chapter_number)) or ""
 
         framework_step = (
             db.query(TaskStep)
@@ -290,134 +478,59 @@ def regenerate_chapter(task_id: int, chapter_number: int) -> None:
             _set_chapters_failed(db, task_id, "框架步骤输出格式异常")
             return
         chapters_list = fw_out.get("chapters")
-        if not isinstance(chapters_list, list):
+        if not isinstance(chapters_list, list) or not chapters_list:
             _set_chapters_failed(db, task_id, "框架无章节列表")
             return
-        ch_info = next((c for c in chapters_list if c.get("number") == chapter_number), None)
-        full_name = (
-            ch_info.get("full_name") if ch_info else f"第{chapter_number}章"
-        ) or f"第{chapter_number}章"
 
-        chapter_points: list[str] = []
-        cp = out.get("chapter_points")
-        if isinstance(cp, dict) and str(chapter_number) in cp:
-            pts = cp[str(chapter_number)]
-            if isinstance(pts, list):
-                chapter_points = [str(p) for p in pts if p]
+        sorted_numbers = sorted(ch.get("number") for ch in chapters_list if ch.get("number") is not None)
+        chapters_step.status = "running"
+        chapters_step.error_message = None
+        db.commit()
 
-        from app.llm_resolver import get_llm_for_step
-        provider, model = get_llm_for_step("chapters")
+        for chapter_number in sorted_numbers:
+            if str(chapter_number) not in review_chapters:
+                continue
+            items = review_chapters[str(chapter_number)]
+            if not isinstance(items, list):
+                continue
+            descriptions = []
+            for it in items:
+                if isinstance(it, dict) and it.get("description"):
+                    descriptions.append(str(it.get("description", "")).strip())
+                elif isinstance(it, dict) and it.get("description") is not None:
+                    descriptions.append(str(it["description"]))
+            if not descriptions:
+                continue
 
-        if chapter_points:
-            messages = build_chapter_regenerate_messages(
-                chapter_full_name=full_name,
-                current_content=current_content,
-                added_points=chapter_points,
-            )
-            chapter_content = call_llm(
-                provider=provider,
-                model=model,
-                messages=messages,
-                temperature=CHAPTER_REGENERATE_TEMPERATURE,
-            )
-        else:
-            analyze_step = (
-                db.query(TaskStep)
-                .filter(TaskStep.task_id == task_id, TaskStep.step_key == "analyze")
-                .first()
-            )
-            params_step = (
-                db.query(TaskStep)
-                .filter(TaskStep.task_id == task_id, TaskStep.step_key == "params")
-                .first()
-            )
-            if not analyze_step or not params_step or analyze_step.status != "completed" or params_step.status != "completed":
-                _set_chapters_failed(db, task_id, "请先完成分析和参数提取")
-                return
             try:
-                analyze_out = json.loads(analyze_step.output_snapshot)
-                analyze_text = str(analyze_out.get("text", ""))
+                ch_out = json.loads(chapters_step.output_snapshot)
             except (json.JSONDecodeError, TypeError):
-                _set_chapters_failed(db, task_id, "分析步骤输出格式异常")
+                _set_chapters_failed(db, task_id, "按章生成步骤输出格式异常")
                 return
-            try:
-                params_out = json.loads(params_step.output_snapshot)
-                bim_requirements = params_out.get("bim_requirements")
-                if not isinstance(bim_requirements, list):
-                    bim_requirements = []
-                bim_requirements = [str(x) for x in bim_requirements]
-                project_info = params_out.get("project_info")
-                if not isinstance(project_info, dict):
-                    project_info = {}
-                risk_points = params_out.get("risk_points")
-                if not isinstance(risk_points, list):
-                    risk_points = []
-                risk_points = [str(x) for x in risk_points if x]
-                scoring_items = params_out.get("scoring_items")
-                if not isinstance(scoring_items, list):
-                    scoring_items = []
-                scoring_items = [str(x) for x in scoring_items if x]
-            except (json.JSONDecodeError, TypeError):
-                _set_chapters_failed(db, task_id, "参数步骤输出格式异常")
-                return
+            if "chapter_points" not in ch_out or not isinstance(ch_out["chapter_points"], dict):
+                ch_out["chapter_points"] = {}
+            ch_out["chapter_points"][str(chapter_number)] = descriptions
+            chapters_step.output_snapshot = json.dumps(ch_out, ensure_ascii=False)
+            db.commit()
 
-            outline_messages = build_chapter_outline_messages(
-                full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
-            )
-            outline_content = call_llm(
-                provider=provider,
-                model=model,
-                messages=outline_messages,
-                temperature=CHAPTER_OUTLINE_TEMPERATURE,
-            )
-            context_chunks = kb_search(query=full_name, top_k=KB_TOP_K)
-            context_text = "\n\n".join(context_chunks) if context_chunks else ""
-            content_messages = build_chapter_content_messages(
-                chapter_full_name=full_name,
-                outline_text=outline_content,
-                context_text=context_text,
-                analyze_text=analyze_text,
-                bim_requirements=bim_requirements,
-                project_info=project_info,
-                risk_points=risk_points,
-                scoring_items=scoring_items,
-            )
-            chapter_content = call_llm(
-                provider=provider,
-                model=model,
-                messages=content_messages,
-                temperature=CHAPTER_CONTENT_TEMPERATURE,
-            )
+            try:
+                _regenerate_one_chapter_impl(db, task_id, chapter_number)
+            except Exception as e:
+                logger.exception(
+                    "regenerate_all_chapters_from_review: task_id=%s chapter %s failed",
+                    task_id,
+                    chapter_number,
+                )
+                _set_chapters_failed(db, task_id, f"第{chapter_number}章重生成失败: {str(e)[:500]}")
+                return
 
         chapters_step = _get_or_create_chapters_step(db, task_id)
-        # Snapshot this chapter's content before overwrite (for 6.1 diff: 要点变更前 vs 变更后)
-        before_regenerate = {}
-        if chapters_step.output_snapshot_before_regenerate:
-            try:
-                before_regenerate = json.loads(chapters_step.output_snapshot_before_regenerate)
-                if not isinstance(before_regenerate, dict):
-                    before_regenerate = {}
-            except (json.JSONDecodeError, TypeError):
-                before_regenerate = {}
-        before_regenerate[str(chapter_number)] = current_content
-        chapters_step.output_snapshot_before_regenerate = json.dumps(
-            before_regenerate, ensure_ascii=False
-        )
-        try:
-            out = json.loads(chapters_step.output_snapshot or "{}")
-        except (json.JSONDecodeError, TypeError):
-            out = {}
-        if not isinstance(out.get("chapters"), dict):
-            out["chapters"] = {}
-        out["chapters"][str(chapter_number)] = chapter_content
-        out.pop("current", None)
-        chapters_step.output_snapshot = json.dumps(out, ensure_ascii=False)
         chapters_step.status = "completed"
         chapters_step.error_message = None
         db.commit()
-        logger.info("regenerate_chapter: task_id=%s chapter %s done", task_id, chapter_number)
+        logger.info("regenerate_all_chapters_from_review: task_id=%s all done", task_id)
     except Exception as e:
-        logger.exception("regenerate_chapter: task_id=%s chapter %s failed", task_id, chapter_number)
+        logger.exception("regenerate_all_chapters_from_review: task_id=%s failed", task_id)
         try:
             db.rollback()
             _set_chapters_failed(db, task_id, str(e)[:ERROR_MESSAGE_MAX_LEN])

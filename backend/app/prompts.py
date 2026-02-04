@@ -1,4 +1,5 @@
 """Prompt templates for LLM steps (analyze, params, framework, etc.)."""
+import json
 import re
 
 from app import config
@@ -642,3 +643,122 @@ def build_chapter_regenerate_messages(
         {"role": "system", "content": CHAPTER_REGENERATE_SYSTEM},
         {"role": "user", "content": user_content},
     ]
+
+
+# --- Review / audit (stage: auto-review) ---
+REVIEW_CHAPTER_FULL_NAME = "{{#chapter_full_name#}}"
+REVIEW_CHAPTER_CONTENT = "{{#chapter_content#}}"
+REVIEW_ANALYZE_EXCERPT = "{{#analyze_excerpt#}}"
+REVIEW_PARAMS_RISK_BIM_SCORING = "{{#params_risk_bim_scoring#}}"
+REVIEW_KB_CONTEXT = "{{#kb_context#}}"
+
+REVIEW_SYSTEM = """你是BIM技术标校审专家，对单章正文进行质量与合规校审。
+
+## 审查维度
+
+请从以下四类逐条判断并输出，若无问题则输出空数组 []。
+
+1. **废标项**：与招标废标条款、实质性响应不符，或遗漏必须项（如必须承诺、必须覆盖的条款）。
+2. **幻觉**：无依据的承诺、编造的数据/标准/条款（招标或知识库中未出现的内容）。
+3. **套路**：空话、模板化表述、与招标无关的泛化内容，缺乏针对本项目的具体表述。
+4. **建议**：可优化表述、建议补充依据、增强针对性等改进建议（可选）。
+
+## 输出格式
+
+仅输出一段合法 JSON 数组，不要 markdown 代码块或前后解释。每个元素为对象：
+- "type"：字符串，取值为「废标项」「幻觉」「套路」「建议」之一。
+- "description"：字符串，问题描述或修改建议。
+- "quote"：字符串，可选，章节内原文引用；若无则空字符串 ""。
+
+若无问题则输出：[]"""
+
+REVIEW_USER_TEMPLATE = """请对以下章节正文进行校审，对照招标分析与参数要求，指出废标项、幻觉、套路及改进建议。
+
+**章节：**
+""" + REVIEW_CHAPTER_FULL_NAME + """
+
+**本章正文：**
+""" + REVIEW_CHAPTER_CONTENT + """
+
+**招标分析摘要：**
+""" + REVIEW_ANALYZE_EXCERPT + """
+
+**参数摘要（废标点、BIM要求、评分项等）：**
+""" + REVIEW_PARAMS_RISK_BIM_SCORING + """
+
+**知识库参考：**
+""" + REVIEW_KB_CONTEXT + """
+
+请仅输出 JSON 数组，不要其他文字。若无问题输出 []。"""
+
+
+def build_review_messages(
+    chapter_full_name: str,
+    chapter_content: str,
+    analyze_text: str,
+    params_risk_bim_scoring: str,
+    kb_context: str,
+) -> list[dict]:
+    """Build [system, user] messages for single-chapter review step."""
+    analyze_excerpt = (analyze_text or "").strip()[: config.CHAPTER_OUTLINE_ANALYZE_MAX_LEN]
+    content_excerpt = (chapter_content or "").strip()[: config.CHAPTER_CONTENT_ANALYZE_MAX_LEN]
+    params_str = (params_risk_bim_scoring or "").strip() or "（无）"
+    kb_str = (kb_context or "").strip() or "（无）"
+    user_content = (
+        REVIEW_USER_TEMPLATE.replace(REVIEW_CHAPTER_FULL_NAME, (chapter_full_name or "").strip())
+        .replace(REVIEW_CHAPTER_CONTENT, content_excerpt)
+        .replace(REVIEW_ANALYZE_EXCERPT, analyze_excerpt)
+        .replace(REVIEW_PARAMS_RISK_BIM_SCORING, params_str)
+        .replace(REVIEW_KB_CONTEXT, kb_str)
+    )
+    return [
+        {"role": "system", "content": REVIEW_SYSTEM},
+        {"role": "user", "content": user_content},
+    ]
+
+
+REVIEW_TYPE_VALUES = ("废标项", "幻觉", "套路", "建议")
+
+
+def parse_review_output(llm_text: str) -> list[dict]:
+    """Parse LLM review output into list of {type, description, quote}.
+
+    Expects JSON array of objects with type, description, optional quote.
+    Returns [] on parse failure or invalid structure.
+    """
+    if not llm_text or not isinstance(llm_text, str):
+        return []
+    text = llm_text.strip()
+    # Strip markdown code block if present
+    if text.startswith("```"):
+        lines = text.split("\n")
+        if lines[0].strip().startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines)
+    try:
+        data = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    result = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        type_val = item.get("type")
+        desc = item.get("description")
+        if type_val is None or (isinstance(type_val, str) and not type_val.strip()):
+            continue
+        if desc is None:
+            desc = ""
+        if not isinstance(desc, str):
+            desc = str(desc)
+        quote_val = item.get("quote", "")
+        if quote_val is None or not isinstance(quote_val, str):
+            quote_val = ""
+        if type_val not in REVIEW_TYPE_VALUES:
+            type_val = "建议"
+        result.append({"type": type_val, "description": desc.strip(), "quote": quote_val.strip()})
+    return result

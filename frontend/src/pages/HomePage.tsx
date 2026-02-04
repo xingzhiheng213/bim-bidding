@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Button, Empty, message, Popconfirm, Table, Tag, Typography } from 'antd'
+import { Button, Empty, Input, message, Modal, Popconfirm, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { createTask, deleteTask, getTasks, type TaskSummary } from '../api/tasks'
 import { designTokens } from '../theme/tokens'
@@ -21,6 +22,8 @@ function getTaskStatusDisplay(status: string): { tagColor: 'default' | 'primary'
 function HomePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createTaskName, setCreateTaskName] = useState('')
   const {
     data: tasksData,
     isLoading: tasksLoading,
@@ -29,7 +32,7 @@ function HomePage() {
     queryFn: getTasks,
   })
   const createMutation = useMutation({
-    mutationFn: () => createTask(),
+    mutationFn: (name: string) => createTask({ name: name.trim() || undefined }),
     onSuccess: (res) => {
       message.success('任务已创建')
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
@@ -65,6 +68,23 @@ function HomePage() {
 
   const taskColumns: ColumnsType<TaskSummary> = [
     {
+      title: '任务名称',
+      dataIndex: 'name',
+      key: 'name',
+      render: (_: string | null, record) => (
+        <div style={{ maxWidth: 520 }}>
+          <Text strong ellipsis={{ tooltip: record.name || `任务 #${record.id}` }}>
+            {record.name || `任务 #${record.id}`}
+          </Text>
+          <div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              #{record.id}
+            </Text>
+          </div>
+        </div>
+      ),
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
@@ -78,14 +98,8 @@ function HomePage() {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (v: string) => new Date(v).toLocaleString(),
-    },
-    {
-      title: '任务 ID',
-      dataIndex: 'id',
-      key: 'id',
-      width: 80,
-      render: (id: number) => <Text type="secondary">{id}</Text>,
+      width: 200,
+      render: (v: string) => new Date(v).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
     },
     {
       title: '操作',
@@ -121,11 +135,40 @@ function HomePage() {
         <Button
           type="primary"
           loading={createMutation.isPending}
-          onClick={() => createMutation.mutate()}
+          onClick={() => setCreateModalOpen(true)}
         >
           创建任务
         </Button>
       </div>
+      <Modal
+        title="创建任务"
+        open={createModalOpen}
+        onCancel={() => setCreateModalOpen(false)}
+        okText="创建"
+        confirmLoading={createMutation.isPending}
+        onOk={() => {
+          createMutation.mutate(createTaskName, {
+            onSuccess: () => {
+              setCreateModalOpen(false)
+              setCreateTaskName('')
+            },
+          })
+        }}
+      >
+        <div style={{ marginBottom: designTokens.marginSM }}>
+          <Text type="secondary">任务名称（可选）：</Text>
+        </div>
+        <Input
+          placeholder="例如：XX项目BIM技术标（2026版）"
+          value={createTaskName}
+          onChange={(e) => setCreateTaskName(e.target.value)}
+          maxLength={255}
+          allowClear
+        />
+        <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+          不填写将自动生成默认名称，后续也可重命名。
+        </Text>
+      </Modal>
       <Title level={5} style={{ marginTop: designTokens.marginXL, marginBottom: designTokens.marginSM }}>
         任务列表
       </Title>
@@ -144,7 +187,7 @@ function HomePage() {
                   <Button
                     type="primary"
                     loading={createMutation.isPending}
-                    onClick={() => createMutation.mutate()}
+                    onClick={() => setCreateModalOpen(true)}
                   >
                     创建任务
                   </Button>

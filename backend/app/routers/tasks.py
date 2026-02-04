@@ -2,6 +2,7 @@
 import io
 import json
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
@@ -18,6 +19,7 @@ from app.settings_store import get_export_format_config
 from app.schemas.compare import DiffResponse
 from app.schemas.task import (
     AcceptFrameworkRequest,
+    AcceptReviewRequest,
     CreateTaskRequest,
     CreateTaskResponse,
     DEFAULT_INITIAL_STEPS,
@@ -29,10 +31,11 @@ from app.schemas.task import (
     TaskSummary,
 )
 from tasks.analyze import run_analyze
-from tasks.chapters import regenerate_chapter, run_chapters
+from tasks.chapters import regenerate_all_chapters_from_review, regenerate_chapter, run_chapters
 from tasks.extract import run_extract
 from tasks.framework import run_framework
 from tasks.params import run_params
+from tasks.review import run_review, run_review_chapter
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -52,12 +55,17 @@ def create_task(
     task = Task(status="pending")
     db.add(task)
     db.flush()  # get task.id
+    if body and body.name and body.name.strip():
+        task.name = body.name.strip()[:255]
+    else:
+        # Default name for better list readability
+        task.name = f"未命名任务-{task.id}-{datetime.now().strftime('%m%d%H%M')}"
     for step_key in steps_to_create:
         step = TaskStep(task_id=task.id, step_key=step_key, status="pending")
         db.add(step)
     db.commit()
     db.refresh(task)
-    return CreateTaskResponse(id=task.id, status=task.status, created_at=task.created_at)
+    return CreateTaskResponse(id=task.id, name=task.name, status=task.status, created_at=task.created_at)
 
 
 @router.get("/{task_id}", response_model=TaskDetailResponse)
@@ -70,6 +78,7 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
     return TaskDetailResponse(
         id=task.id,
         user_id=task.user_id,
+        name=task.name,
         status=task.status,
         created_at=task.created_at,
         updated_at=task.updated_at,
@@ -661,6 +670,158 @@ def regenerate_chapter_step(
     return {"message": "该章已重新入队", "step_key": "chapters"}
 
 
+@router.post("/{task_id}/steps/review/run", status_code=202)
+def run_review_step(
+    task_id: int,
+    chapter_number: int | None = Query(None, description="If set, run review for this chapter only"),
+    db: Session = Depends(get_db),
+):
+    """Enqueue review for all chapters or a single chapter. Requires chapters step completed."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    chapters_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")
+        .first()
+    )
+    if not chapters_step or chapters_step.status != "completed" or not chapters_step.output_snapshot:
+        raise HTTPException(status_code=400, detail="请先完成按章生成")
+
+    review_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "review")
+        .first()
+    )
+    if not review_step:
+        review_step = TaskStep(task_id=task_id, step_key="review", status="pending")
+        db.add(review_step)
+        db.flush()
+
+    if chapter_number is not None:
+        if review_step.status == "running":
+            raise HTTPException(
+                status_code=400,
+                detail="全章审查进行中，请稍后再试单章审查",
+            )
+        try:
+            ch_out = json.loads(chapters_step.output_snapshot)
+        except (json.JSONDecodeError, TypeError):
+            raise HTTPException(status_code=400, detail="按章生成步骤输出格式异常")
+        chapters_dict = ch_out.get("chapters")
+        if not isinstance(chapters_dict, dict) or str(chapter_number) not in chapters_dict:
+            raise HTTPException(status_code=400, detail="该章节不存在或按章生成无该章内容")
+        framework_step = (
+            db.query(TaskStep)
+            .filter(TaskStep.task_id == task_id, TaskStep.step_key == "framework")
+            .first()
+        )
+        if not framework_step or not framework_step.output_snapshot:
+            raise HTTPException(status_code=400, detail="请先完成框架")
+        try:
+            fw_out = json.loads(framework_step.output_snapshot)
+        except (json.JSONDecodeError, TypeError):
+            raise HTTPException(status_code=400, detail="框架步骤输出格式异常")
+        chapters_list = fw_out.get("chapters")
+        if not isinstance(chapters_list, list) or not any(
+            c.get("number") == chapter_number for c in chapters_list
+        ):
+            raise HTTPException(status_code=400, detail="框架中无该章节")
+        review_step.status = "running"
+        review_step.error_message = None
+        db.commit()
+        run_review_chapter.delay(task_id, chapter_number)
+        return {"message": "单章审查已入队", "step_key": "review"}
+
+    if review_step.status == "running":
+        return {"message": "审查已在进行中", "step_key": "review"}
+
+    review_step.status = "running"
+    review_step.error_message = None
+    db.commit()
+
+    run_review.delay(task_id)
+    return {"message": "审查已入队", "step_key": "review"}
+
+
+@router.post("/{task_id}/steps/review/accept", status_code=200)
+def accept_review_step(
+    task_id: int,
+    body: AcceptReviewRequest,
+    db: Session = Depends(get_db),
+):
+    """Accept review items for a chapter: write to chapter_points and enqueue regenerate."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    chapters_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")
+        .first()
+    )
+    if not chapters_step or not chapters_step.output_snapshot:
+        raise HTTPException(status_code=400, detail="按章生成未完成或该任务无按章生成步骤")
+    try:
+        ch_out = json.loads(chapters_step.output_snapshot)
+        chapters = ch_out.get("chapters")
+        if not isinstance(chapters, dict) or str(body.chapter_number) not in chapters:
+            raise HTTPException(status_code=400, detail="该章节不存在或按章生成未完成")
+    except (json.JSONDecodeError, TypeError):
+        raise HTTPException(status_code=400, detail="按章生成步骤输出格式异常")
+
+    review_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "review")
+        .first()
+    )
+    if not review_step or not review_step.output_snapshot:
+        raise HTTPException(status_code=400, detail="请先完成审查或审查无结果")
+
+    if "chapter_points" not in ch_out or not isinstance(ch_out["chapter_points"], dict):
+        ch_out["chapter_points"] = {}
+    ch_out["chapter_points"][str(body.chapter_number)] = body.accepted_items
+    chapters_step.output_snapshot = json.dumps(ch_out, ensure_ascii=False)
+    db.commit()
+
+    regenerate_chapter.delay(task_id, body.chapter_number)
+    return {"message": "已接受校审意见，该章已加入重生成队列", "step_key": "chapters"}
+
+
+@router.post("/{task_id}/steps/review/regenerate-all", status_code=202)
+def regenerate_all_from_review_step(task_id: int, db: Session = Depends(get_db)):
+    """One-click: regenerate all chapters sequentially using review output as chapter_points.
+    Enqueues a single task that runs chapters in order to respect API limits.
+    """
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    chapters_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")
+        .first()
+    )
+    if not chapters_step or not chapters_step.output_snapshot:
+        raise HTTPException(status_code=400, detail="请先完成按章生成")
+    if chapters_step.status == "running":
+        raise HTTPException(status_code=400, detail="章节正在重生成中，请稍后再试")
+    if chapters_step.status != "completed":
+        raise HTTPException(status_code=400, detail="请先完成按章生成")
+
+    review_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "review")
+        .first()
+    )
+    if not review_step or review_step.status != "completed" or not review_step.output_snapshot:
+        raise HTTPException(status_code=400, detail="请先完成校审")
+
+    regenerate_all_chapters_from_review.delay(task_id)
+    return {"message": "已入队，将按章顺序重生成全部章节", "step_key": "chapters"}
+
+
 @router.get("/{task_id}/download")
 def download_docx(task_id: int, db: Session = Depends(get_db)):
     """Generate DOCX from assembled Markdown and return as file stream."""
@@ -695,4 +856,4 @@ def download_docx(task_id: int, db: Session = Depends(get_db)):
 def list_tasks(db: Session = Depends(get_db)):
     """List tasks (newest first)."""
     tasks = db.query(Task).order_by(Task.created_at.desc()).all()
-    return [TaskSummary(id=t.id, status=t.status, created_at=t.created_at) for t in tasks]
+    return [TaskSummary(id=t.id, name=t.name, status=t.status, created_at=t.created_at) for t in tasks]

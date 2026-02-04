@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { DownloadOutlined, LoadingOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Checkbox, Collapse, Input, message, Modal, Progress, Spin, Steps, Table, Tag, Typography } from 'antd'
 import type { StepStatus } from '../theme/stepStatus'
@@ -42,8 +42,17 @@ const { Title, Text } = Typography
 const PREVIEW_LEN = 400
 const ANALYZE_PREVIEW_LEN = 500
 
+/** 校审维度说明（任务页展示「审什么」；后续可扩展为从配置/接口读取并合并自定义项） */
+const REVIEW_DIMENSIONS: { key: string; label: string; desc: string; tagColor: 'error' | 'warning' | 'default' | 'processing' }[] = [
+  { key: 'feibiao', label: '废标项', desc: '与招标废标条款、实质性响应不符或遗漏必须项', tagColor: 'error' },
+  { key: 'huanjue', label: '幻觉', desc: '无依据的承诺、编造的数据或条款', tagColor: 'warning' },
+  { key: 'taolu', label: '套路', desc: '空话、AI惯用模板化表述、缺乏针对本项目的具体内容', tagColor: 'default' },
+  { key: 'jianyi', label: '建议', desc: '可优化表述、补充依据、增强针对性', tagColor: 'processing' },
+]
+
 function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const {
@@ -62,7 +71,8 @@ function TaskDetailPage() {
       const pa = d?.steps?.find((s: TaskStep) => s.step_key === 'params')
       const fw = d?.steps?.find((s: TaskStep) => s.step_key === 'framework')
       const ch = d?.steps?.find((s: TaskStep) => s.step_key === 'chapters')
-      return ex?.status === 'running' || an?.status === 'running' || pa?.status === 'running' || fw?.status === 'running' || ch?.status === 'running' ? 2000 : false
+      const rv = d?.steps?.find((s: TaskStep) => s.step_key === 'review')
+      return ex?.status === 'running' || an?.status === 'running' || pa?.status === 'running' || fw?.status === 'running' || ch?.status === 'running' || rv?.status === 'running' ? 2000 : false
     },
   })
 
@@ -214,7 +224,7 @@ function TaskDetailPage() {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (t: string) => new Date(t).toLocaleString(),
+      render: (t: string) => new Date(t).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
     },
   ]
 
@@ -623,7 +633,7 @@ function TaskDetailPage() {
   return (
     <>
       <Title level={2} style={{ marginBottom: 16 }}>
-        任务详情
+        {data?.name ? data.name : '任务详情'}
       </Title>
         {taskLoading && <Spin />}
         {taskError && (
@@ -634,6 +644,9 @@ function TaskDetailPage() {
         {data && (
           <>
             <div style={{ marginBottom: 16 }}>
+              <Text strong>任务名称：</Text>
+              <Text>{data.name || '（未命名）'}</Text>
+              <span style={{ marginLeft: 24 }} />
               <Text strong>任务 ID：</Text>
               <Text>{data.id}</Text>
               <span style={{ marginLeft: 24 }} />
@@ -641,7 +654,7 @@ function TaskDetailPage() {
               <Text>{data.status}</Text>
               <span style={{ marginLeft: 24 }} />
               <Text strong>创建时间：</Text>
-              <Text>{new Date(data.created_at).toLocaleString()}</Text>
+              <Text>{new Date(data.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</Text>
             </div>
 
             {stepsItems.length > 0 && (
@@ -929,6 +942,66 @@ function TaskDetailPage() {
                               }
                             })}
                         />
+                      )}
+                    </>
+                  )}
+                  {stepKey === 'review' && (
+                    <>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
+                        {chaptersStep?.status !== 'completed'
+                          ? '请先完成按章生成'
+                          : step?.status === 'running'
+                            ? '审查中…'
+                            : step?.status === 'completed'
+                              ? '审查完成。'
+                              : step?.status === 'failed'
+                                ? '审查失败'
+                                : '可进入校审模块开始审查'}
+                      </Text>
+                      <div style={{ marginBottom: designTokens.marginMD }}>
+                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
+                          校审将从以下维度检查各章：
+                        </Text>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {REVIEW_DIMENSIONS.map((d) => (
+                            <div
+                              key={d.key}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: 8,
+                                padding: '6px 10px',
+                                background: 'rgba(0,0,0,0.02)',
+                                borderRadius: 6,
+                              }}
+                            >
+                              <Tag
+                                color={d.tagColor}
+                                style={{
+                                  marginRight: 0,
+                                  flexShrink: 0,
+                                  fontSize: 12,
+                                  minWidth: 56,
+                                  textAlign: 'center',
+                                  display: 'inline-block',
+                                }}
+                              >
+                                {d.label}
+                              </Tag>
+                              <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 0, flex: 1 }}>
+                                {d.desc}
+                              </Text>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {step?.status === 'failed' && step?.error_message && (
+                        <Alert type="error" message="审查失败" description={step.error_message} showIcon style={{ marginTop: designTokens.marginSM }} />
+                      )}
+                      {chaptersStep?.status === 'completed' && id && (
+                        <Button type="primary" onClick={() => navigate(`/review/${id}`)}>
+                          进入校审
+                        </Button>
                       )}
                     </>
                   )}

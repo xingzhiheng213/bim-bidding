@@ -122,6 +122,18 @@ def update_base_url_in_db(provider: str, base_url: str | None) -> None:
         db.close()
 
 
+def clear_llm_config(provider: str) -> None:
+    """Remove stored API key and base_url for provider (delete row)."""
+    if provider not in SUPPORTED_PROVIDERS:
+        raise ValueError(f"Unsupported provider: {provider}")
+    db: Session = SessionLocal()
+    try:
+        db.query(LlmSetting).filter(LlmSetting.provider == provider).delete()
+        db.commit()
+    finally:
+        db.close()
+
+
 def get_all_providers_status() -> list[dict]:
     """Return list of {provider, configured, masked_key, base_url} for all supported providers."""
     db: Session = SessionLocal()
@@ -173,6 +185,22 @@ DEFAULT_EXPORT_FORMAT: dict = {
 FONT_SIZE_MIN, FONT_SIZE_MAX = 8, 72
 LINE_SPACING_MIN, LINE_SPACING_MAX = 0.5, 3.0
 FIRST_LINE_INDENT_MAX = 100
+
+# Supported font names for export format dropdown (configurable; extend here or later from config/DB).
+SUPPORTED_EXPORT_FONTS: list[str] = [
+    "宋体",
+    "黑体",
+    "微软雅黑",
+    "楷体",
+    "仿宋",
+    "Arial",
+    "Times New Roman",
+]
+
+
+def get_supported_export_fonts() -> list[str]:
+    """Return list of font names supported for export format (heading/body/table)."""
+    return list(SUPPORTED_EXPORT_FONTS)
 
 
 def get_export_format_config() -> dict:
@@ -343,7 +371,8 @@ def set_kb_config(
             if ragflow_api_key is not None:
                 if ragflow_api_key.strip():
                     row.ragflow_encrypted_api_key = encrypt_api_key(ragflow_api_key)
-                # else: keep current (do not clear)
+                else:
+                    row.ragflow_encrypted_api_key = None  # explicit empty string = clear key
             if ragflow_dataset_ids is not None:
                 row.ragflow_dataset_ids = ragflow_dataset_ids.strip() or None
         db.commit()
@@ -383,7 +412,7 @@ def get_ragflow_effective() -> tuple[str, str, list[str]] | None:
 
 # --- Platform model config (default + per-step) ---
 
-STEP_KEYS = ("analyze", "params", "framework", "chapters")
+STEP_KEYS = ("analyze", "params", "framework", "chapters", "review")
 
 
 def get_model_config() -> dict:

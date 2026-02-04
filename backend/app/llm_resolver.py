@@ -8,6 +8,7 @@ _STEP_ENV_MAP = {
     "params": (config.PARAMS_LLM_PROVIDER, config.PARAMS_LLM_MODEL),
     "framework": (config.FRAMEWORK_LLM_PROVIDER, config.FRAMEWORK_LLM_MODEL),
     "chapters": (config.CHAPTER_LLM_PROVIDER, config.CHAPTER_LLM_MODEL),
+    "review": (config.CHAPTER_LLM_PROVIDER, config.CHAPTER_LLM_MODEL),
 }
 
 

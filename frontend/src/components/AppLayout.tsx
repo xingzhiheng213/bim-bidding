@@ -15,6 +15,7 @@ const SIDER_WIDTH = 220
 const mainNavItems = [
   { key: '/', label: '首页' },
   { key: '/compare', label: '对比' },
+  { key: '/review', label: '校审' },
 ]
 const bottomNavItems = [{ key: '/settings', label: '设置' }]
 
@@ -33,9 +34,11 @@ export default function AppLayout() {
         ? '/settings'
         : location.pathname.startsWith('/compare')
           ? '/compare'
-          : location.pathname.startsWith('/tasks')
-            ? '/'
-            : location.pathname
+          : location.pathname.startsWith('/review')
+            ? '/review'
+            : location.pathname.startsWith('/tasks')
+              ? '/'
+              : location.pathname
 
   return (
     <Layout style={{ minHeight: '100vh' }}>

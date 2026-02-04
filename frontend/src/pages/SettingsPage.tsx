@@ -4,6 +4,7 @@ import { Button, Card, Checkbox, Input, InputNumber, message, Select, Spin, Tag,
 import {
   type ExportFormatConfig,
   getSettingsExportFormat,
+  getSettingsExportFormatFonts,
   getSettingsKnowledgeBase,
   getSettingsLlm,
   getSettingsModels,
@@ -80,6 +81,11 @@ function SettingsPage() {
     queryFn: getSettingsExportFormat,
   })
 
+  const { data: exportFormatFonts, isLoading: exportFormatFontsLoading } = useQuery({
+    queryKey: ['settings', 'export-format-fonts'],
+    queryFn: getSettingsExportFormatFonts,
+  })
+
   const {
     data: kbData,
     isLoading: kbLoading,
@@ -147,13 +153,15 @@ function SettingsPage() {
       provider,
       apiKey,
       baseUrl,
+      clear,
     }: {
       provider: string
-      apiKey: string | undefined
-      baseUrl: string | undefined
-    }) => postSettingsLlm(provider, apiKey, baseUrl),
-    onSuccess: (_, { provider }) => {
-      message.success('已保存')
+      apiKey?: string | undefined
+      baseUrl?: string | undefined
+      clear?: boolean
+    }) => postSettingsLlm(provider, apiKey, baseUrl, clear ? { clear: true } : undefined),
+    onSuccess: (_, { provider, clear: didClear }) => {
+      message.success(didClear ? '已取消配置' : '已保存')
       setInputByProvider((prev) => ({ ...prev, [provider]: '' }))
       setBaseUrlByProvider((prev) => ({ ...prev, [provider]: '' }))
       queryClient.invalidateQueries({ queryKey: ['settings', 'llm'] })
@@ -313,6 +321,17 @@ function SettingsPage() {
                   >
                     保存
                   </Button>
+                  {configured && (
+                    <Button
+                      danger
+                      loading={saveMutation.isPending}
+                      onClick={() => {
+                        saveMutation.mutate({ provider: key, clear: true })
+                      }}
+                    >
+                      取消配置
+                    </Button>
+                  )}
                 </div>
               </div>
             )
@@ -505,6 +524,20 @@ function SettingsPage() {
                   >
                     检测连通性
                   </Button>
+                  {kbData?.ragflow_configured && (
+                    <Button
+                      danger
+                      loading={saveKnowledgeBaseMutation.isPending}
+                      onClick={() => {
+                        saveKnowledgeBaseMutation.mutate({
+                          kb_type: 'ragflow',
+                          ragflow_api_key: '',
+                        })
+                      }}
+                    >
+                      取消配置
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -516,7 +549,9 @@ function SettingsPage() {
         <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
           配置导出 Word 文档的标题、正文、表格字体与字号，以及首行缩进、行距。
         </Text>
-        {exportFormatLoading && <Spin size="small" style={{ marginBottom: designTokens.marginSM }} />}
+        {(exportFormatLoading || exportFormatFontsLoading) && (
+          <Spin size="small" style={{ marginBottom: designTokens.marginSM }} />
+        )}
         {!exportFormatLoading && (
           <div>
             {[
@@ -531,12 +566,15 @@ function SettingsPage() {
                   <Text>{label}字体</Text>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: designTokens.marginXS, flex: 1 }}>
-                  <Input
+                  <Select
                     style={{ width: 120 }}
-                    value={exportFormat[fontKey as keyof ExportFormatConfig] ?? ''}
-                    onChange={(e) =>
-                      setExportFormat((prev) => ({ ...prev, [fontKey]: e.target.value }))
+                    placeholder={exportFormatFontsLoading ? '加载中...' : '选择字体'}
+                    loading={exportFormatFontsLoading}
+                    value={exportFormat[fontKey as keyof ExportFormatConfig] ?? undefined}
+                    onChange={(v) =>
+                      setExportFormat((prev) => ({ ...prev, [fontKey]: v ?? undefined }))
                     }
+                    options={(exportFormatFonts ?? []).map((font) => ({ label: font, value: font }))}
                   />
                   <Text type="secondary">字号</Text>
                   <InputNumber

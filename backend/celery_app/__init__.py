@@ -7,6 +7,6 @@ app = Celery(
     "bim_bidding",
     broker=config.broker_url,
     backend=config.result_backend,
-    include=["tasks.demo", "tasks.extract", "tasks.analyze", "tasks.params", "tasks.framework", "tasks.chapters"],
+    include=["tasks.demo", "tasks.extract", "tasks.analyze", "tasks.params", "tasks.framework", "tasks.chapters", "tasks.review"],
 )
 app.config_from_object(config)

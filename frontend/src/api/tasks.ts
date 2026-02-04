@@ -15,6 +15,7 @@ export interface TaskStep {
 export interface TaskDetail {
   id: number
   user_id: string | null
+  name: string | null
   status: string
   created_at: string
   updated_at: string
@@ -23,19 +24,22 @@ export interface TaskDetail {
 
 export interface CreateTaskResponse {
   id: number
+  name: string | null
   status: string
   created_at: string
 }
 
 export interface TaskSummary {
   id: number
+  name: string | null
   status: string
   created_at: string
 }
 
-export async function createTask(initialSteps?: string[]): Promise<CreateTaskResponse> {
+export async function createTask(args?: { initialSteps?: string[]; name?: string }): Promise<CreateTaskResponse> {
   const { data } = await api.post<CreateTaskResponse>('/api/tasks', {
-    initial_steps: initialSteps ?? undefined,
+    initial_steps: args?.initialSteps ?? undefined,
+    name: args?.name ?? undefined,
   })
   return data
 }
@@ -188,6 +192,54 @@ export async function regenerateChapter(
     addedPoints != null && addedPoints.length > 0
       ? { chapter_number: chapterNumber, added_points: addedPoints }
       : { chapter_number: chapterNumber },
+  )
+  return data
+}
+
+export interface RunReviewStepResponse {
+  message: string
+  step_key: string
+}
+
+export async function runReview(
+  taskId: string,
+  chapterNumber?: number,
+): Promise<RunReviewStepResponse> {
+  const url =
+    chapterNumber != null
+      ? `/api/tasks/${taskId}/steps/review/run?chapter_number=${chapterNumber}`
+      : `/api/tasks/${taskId}/steps/review/run`
+  const { data } = await api.post<RunReviewStepResponse>(url)
+  return data
+}
+
+export interface AcceptReviewResponse {
+  message: string
+  step_key: string
+}
+
+export async function acceptReview(
+  taskId: string,
+  chapterNumber: number,
+  acceptedItems: string[],
+): Promise<AcceptReviewResponse> {
+  const { data } = await api.post<AcceptReviewResponse>(
+    `/api/tasks/${taskId}/steps/review/accept`,
+    { chapter_number: chapterNumber, accepted_items: acceptedItems },
+  )
+  return data
+}
+
+export interface RegenerateAllFromReviewResponse {
+  message: string
+  step_key: string
+}
+
+export async function regenerateAllChaptersFromReview(
+  taskId: string,
+): Promise<RegenerateAllFromReviewResponse> {
+  const { data } = await api.post<RegenerateAllFromReviewResponse>(
+    `/api/tasks/${taskId}/steps/review/regenerate-all`,
   )
   return data
 }

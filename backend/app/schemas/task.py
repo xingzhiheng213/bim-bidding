@@ -10,6 +10,7 @@ DEFAULT_INITIAL_STEPS = ["upload", "analyze", "framework", "chapters", "export"]
 class CreateTaskRequest(BaseModel):
     """Request body for POST /api/tasks."""
     initial_steps: list[str] | None = None  # default applied in route
+    name: str | None = None
 
 
 class AcceptFrameworkRequest(BaseModel):
@@ -34,6 +35,12 @@ class RegenerateChapterRequest(BaseModel):
     added_points: list[str] | None = None
 
 
+class AcceptReviewRequest(BaseModel):
+    """Request body for POST /api/tasks/{id}/steps/review/accept."""
+    chapter_number: int
+    accepted_items: list[str]  # user-selected review item descriptions -> chapter_points
+
+
 class TaskStepSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -51,6 +58,7 @@ class TaskStepSchema(BaseModel):
 class CreateTaskResponse(BaseModel):
     """Response for POST /api/tasks."""
     id: int
+    name: str | None = None
     status: str
     created_at: datetime
 
@@ -59,6 +67,7 @@ class TaskDetailResponse(BaseModel):
     """Response for GET /api/tasks/{id} (task + steps)."""
     id: int
     user_id: str | None
+    name: str | None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -68,5 +77,6 @@ class TaskDetailResponse(BaseModel):
 class TaskSummary(BaseModel):
     """Brief task for GET /api/tasks list."""
     id: int
+    name: str | None = None
     status: str
     created_at: datetime

@@ -45,6 +45,8 @@ ZHIPU_BASE_URL: str = os.getenv(
 # LLM HTTP timeout (seconds): read timeout for long analysis/framework responses
 LLM_TIMEOUT_CONNECT: float = float(os.getenv("LLM_TIMEOUT_CONNECT", "10"))
 LLM_TIMEOUT_READ: float = float(os.getenv("LLM_TIMEOUT_READ", "180"))
+# LLM max completion tokens (output length). Default 8K; can be overridden via env.
+LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
 
 # Analyze step (stage 2.2): default deepseek / deepseek-chat (zhipu 已取消测试)
 ANALYZE_LLM_PROVIDER: str = os.getenv("ANALYZE_LLM_PROVIDER", "deepseek")

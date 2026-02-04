@@ -72,6 +72,7 @@ export const TASK_STEP_ORDER: readonly string[] = [
   'params',
   'framework',
   'chapters',
+  'review',
   'export',
 ]
 
@@ -83,5 +84,6 @@ export const STEP_TITLES: Record<string, string> = {
   params: '参数',
   framework: '框架',
   chapters: '按章生成',
+  review: '审查',
   export: '导出',
 }
