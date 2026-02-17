@@ -18,6 +18,7 @@ from app.prompts import (
     build_chapter_content_messages,
     build_chapter_outline_messages,
     build_chapter_regenerate_messages,
+    framework_chapter_to_outline,
 )
 
 logger = logging.getLogger(__name__)
@@ -135,15 +136,17 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
         except (json.JSONDecodeError, TypeError):
             raise ValueError("参数步骤输出格式异常")
 
-        outline_messages = build_chapter_outline_messages(
-            full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
-        )
-        outline_content = call_llm(
-            provider=provider,
-            model=model,
-            messages=outline_messages,
-            temperature=CHAPTER_OUTLINE_TEMPERATURE,
-        )
+        outline_content = framework_chapter_to_outline(ch_info or {})
+        if not outline_content:
+            outline_messages = build_chapter_outline_messages(
+                full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
+            )
+            outline_content = call_llm(
+                provider=provider,
+                model=model,
+                messages=outline_messages,
+                temperature=CHAPTER_OUTLINE_TEMPERATURE,
+            )
         context_chunks = kb_search(query=full_name, top_k=KB_TOP_K)
         context_text = "\n\n".join(context_chunks) if context_chunks else ""
         content_messages = build_chapter_content_messages(
@@ -307,20 +310,22 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
             chapters_step.output_snapshot = json.dumps(out, ensure_ascii=False)
             db.commit()
 
-            try:
-                outline_messages = build_chapter_outline_messages(
-                    full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
-                )
-                outline_content = call_llm(
-                    provider=provider,
-                    model=model,
-                    messages=outline_messages,
-                    temperature=CHAPTER_OUTLINE_TEMPERATURE,
-                )
-            except Exception as e:
-                logger.exception("run_chapters: task_id=%s chapter %s outline failed", task_id, num)
-                _set_chapters_failed(db, task_id, f"第{num}章小节大纲生成失败: {str(e)[:500]}")
-                return
+            outline_content = framework_chapter_to_outline(ch)
+            if not outline_content:
+                try:
+                    outline_messages = build_chapter_outline_messages(
+                        full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
+                    )
+                    outline_content = call_llm(
+                        provider=provider,
+                        model=model,
+                        messages=outline_messages,
+                        temperature=CHAPTER_OUTLINE_TEMPERATURE,
+                    )
+                except Exception as e:
+                    logger.exception("run_chapters: task_id=%s chapter %s outline failed", task_id, num)
+                    _set_chapters_failed(db, task_id, f"第{num}章小节大纲生成失败: {str(e)[:500]}")
+                    return
 
             context_chunks = kb_search(query=full_name, top_k=KB_TOP_K)
             context_text = "\n\n".join(context_chunks) if context_chunks else ""

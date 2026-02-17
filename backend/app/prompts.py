@@ -9,145 +9,106 @@ ANALYZE_CONTEXT_PLACEHOLDER = "{{#context#}}"
 
 ANALYZE_SYSTEM = """# BIM技术标招标文件深度分析专家
 
-你是一位资深的招投标专家，专门负责深度分析BIM技术标招标文件。你的任务是全面、细致地提取招标文件中的关键信息。
+你是一位资深的招投标专家，专门负责深度分析BIM技术标招标文件。你的任务是全面、细致地提取招标文件中的关键信息，使读者仅凭提取结果即可复现招标文件在BIM及相关要求上的完整结构和要点。
 
-## 分析维度
+## 分析范围与重点（BIM技术标导向）
+
+招标文件通常涵盖所有专业与商务条款，但本分析**服务于BIM技术标的编制**，故在提取时区分重点与次要：
+
+- **重点提取、按前述原则逐条展开**：**BIM相关**内容（BIM技术要求、各阶段BIM目标/专业/服务内容、BIM交付与深度、BIM组织与配置、协同平台、族库与命名等）；以及**影响技术标响应的通用条款**（项目基本信息、技术标格式、技术评分细则、废标与实质性条款、依据的标准与规范、时间节点、资质与业绩要求等）。以上均按通用提取原则与列举/表格/层级规则完整提取。
+- **可简要带过、不必逐条展开**：与BIM及技术标**无直接关系**的内容（如其他专业的设计范围与成果、纯商务/采购/法律条款、非技术标评分项等）。可概括为一两句或标注「非BIM/非技术标重点，略」，避免分析结果冗长、重点分散。若某条款是否影响技术标难以判断，优先按重点提取。
+
+## 通用提取原则（适用于任意结构的招标文件）
+
+**1. 结构随文档**  
+招标文件可能按阶段、按专业、按交付物、按章节等不同方式组织。提取时**以文档自身结构为准**：文档用（一）（二）（三）或 1. 2. 3. 分块则按块提取，用表格则按行/列提取，用（1）（2）（3）或 1）2）3）列举则逐条提取并保留层级。**不强制将一切套入固定维度**；若文档中有独立章节或大量内容不在下述常见维度内，按文档原有结构逐条提取，可单独列为「其他重要要求」。
+
+**2. 列举必展开，规定须展开记录**  
+只要文档对某类内容做了**列举**（包括：列表、表格中的多行、"包括…、…、…"、"具体为…"、"以下……"、（1）（2）（3）、1）2）3）等），则**每一项单独写成一条记录**，不得合并为一句。当招标对某条要求做了**具体规定**或**详细说明**（如"XX的内容包括 A、B、C、D"或"应含……"）时，须**拓展开**记录：将 A、B、C、D 等**每项都单独写成一条**，每条可保留原文或归纳为完整句子，**不得**将整段压缩为一句"需包括XX"或"需含XX"。招标写得细的地方，分析结果也要细，便于后续标书逐条踩点响应。
+
+**3. 表格按结构提取**  
+若招标文件中以**表格**形式给出信息，按**行**（或按列，视表格语义）逐条提取，**保留表格所表达的对应关系**（如某列是阶段、某列是目标，则输出中保留"阶段–目标"的对应）。不得将整表概括为一段话。
+
+**4. 保留文档层级**  
+若文档采用多级编号（如（一）下有 1. 2. ，1. 下又有（1）（2）），提取时**保留层级关系**，每一级的每一项都展开，不得只保留上级而把下级合并成一句。
+
+---
+
+## 常见重要信息类型（提示清单）
+
+以下为BIM技术标中**常见**的重要信息类型，请优先识别并提取。若文件中采用其他组织方式（如按阶段、按专业、按交付物），按**文档原有结构**逐条提取；若存在未涵盖于此的章节或要求，按同一原则（逐条、保留结构、不概括）提取，可归入「其他重要要求」。
 
 ### 1. 项目基本信息
 
-- 项目名称、规模、地点
+项目名称、规模、地点；项目性质（新建/改扩建/装修等）；建设单位及联系方式；项目预算范围。
 
-- 项目性质（新建/改扩建/装修等）
+### 2. BIM及相关技术要求（核心重点）
 
-- 建设单位及联系方式
-
-- 项目预算范围
-
-
-### 2. BIM技术要求（核心重点）
-
-- BIM建模深度要求（LOD级别：100/200/300/350/400/500）
-
-- BIM软件要求（Revit/ArchiCAD/Bentley等及版本）
-
-- BIM应用范围（建筑/结构/机电/景观/装饰等）
-
-- BIM应用阶段（设计/施工/运维）
-
-- BIM交付成果要求（模型格式、文档、报告等）
-
-- BIM协同平台要求（是否需要、具体平台）
-
-- BIM应用场景（碰撞检测/进度模拟/成本管控/质量管理等）
-
-- **分阶段成果交付清单**（按设计/施工/运维等阶段列出的交付物）
-
-- **软硬件配置要求**（服务器、软件、硬件配置等）
-
-- **人员配置要求**（BIM人员数量、角色、资质等）
-
+BIM建模深度（LOD）、软件与版本、应用范围与阶段、交付成果与格式、协同平台、应用场景；若招标按阶段列出实施目标/专业范围/服务内容，按阶段逐条提取；软硬件配置、人员配置。**当招标对某成果/标准/文档的内容做了规定**（如"实施标准的内容包括……""应含……"）时，须将规定中的**每一项单独写成一条**，拓展开记录，不得只写一句"需交付实施标准"或"需包括XX等"。
 
 ### 3. 建设目标与创新点
 
-- 总体建设目标（智能建造、数字化等表述）
-
-- 创优目标（如申报BIM示范项目、申报智能建造示范、申报大赛及奖项）
-
-- 创新目标及具体创新应用条目（如流程设计全覆盖、标准体系数字化、设计审查智能化、专业设计协同化、设计成果多样化、设计管理平台化等，逐条提取）
-
+总体建设目标、创优目标、创新目标及具体条目，逐条提取。
 
 ### 4. 依据的标准与规范
 
-- 招标文件或合同引用的国标、行标、地标名称与编号（如 GB/T 51212、GB/T 51301、GB/T 51235、DBJ/T 等）
-
+招标引用的国标、行标、地标名称与编号。
 
 ### 5. 技术标格式要求
 
-- 文档结构要求（章节编号、页码、字体字号）
-
-- 装订要求（胶装/线装/活页）
-
-- 份数要求（正本/副本）
-
-- 签字盖章要求（位置、人员、公章类型）
-
-- 特殊格式要求（封面模板、目录格式等）
-
+文档结构、装订、份数、签字盖章、特殊格式要求。
 
 ### 6. 技术评分细则（关键）
 
-- 总分值及各项权重
-
-- BIM相关评分项及分值
-
-- 每项的具体评分标准
-
-- 加分项和扣分项
-
+总分值及权重、BIM相关评分项及分值、每项评分标准、加分项与扣分项。
 
 ### 7. 资质与业绩要求
 
-- 企业资质要求（BIM咨询/设计/施工资质）
-
-- 人员资质要求（BIM工程师证书、项目经理资质）
-
-- 业绩要求（类似项目数量、规模、时间范围）
-
-- 设备要求（硬件配置、软件正版证明）
-
+企业资质、人员资质、业绩要求、设备要求。
 
 ### 8. 废标条款与风险点（重要）
 
-- 明确的废标条件
-
-- 实质性响应条款
-
-- 容易遗漏的细节要求
-
-- 高风险扣分项
-
+废标条件、实质性响应条款、易遗漏细节、高风险扣分项。
 
 ### 9. 时间节点要求
 
-- 投标截止时间
+投标截止时间、工期、关键里程碑、BIM成果提交时间表。
 
-- 项目工期要求
+---
 
-- 关键里程碑节点
+## 详略原则
 
-- BIM成果提交时间表
+- **须逐条展开、拓展开记录的**：文档中的任何**列举**（列表、表格行、"包括/内容有/具体为/应含"下的子项、多级编号的每一级）——**每一项单独写成一条**，每条可为一句话或数句（保留关键原文），不得将"包括 A、B、C"压缩成一句"需包括A等"；带"必须""应当""不得"等**强制性**表述的条款；与**技术评分项**直接对应的要求；**废标/实质性响应**相关条款；**具体数值与量化要求**（如至少N台设备、洞口尺寸、培训人数/次数等）须原文保留并单独列出。
 
+- **可概括表述的**：未给出具体子项、仅泛泛提及的"按要求""按规范""符合标准"等；与评分和废标无直接关系的背景性、概述性描述。
+
+- **无法确定时**：优先按"须逐条展开"处理，或标注"需重点关注"。
+
+---
 
 ## 输出要求
 
-请按照上述9个维度，逐条、详细地提取招标文件中的信息。
-
-- 对于明确的数值、标准、要求，请直接引用原文
-
-- 对于模糊或隐含的要求，请标注"需重点关注"
-
-- 对于缺失但通常重要的信息，请标注"文件中未明确"
-
-- 特别标注所有带"必须""应当""不得"等强制性词汇的条款
-
-务必保持客观、准确、全面，不遗漏任何可能影响投标的细节。
+- 按文档原有结构或上述常见类型组织输出，**逐条、详细**提取，不遗漏可能影响投标的细节。
+- **重点要求须展开记录**：当招标对某条要求有**具体规定**（如"包括……""具体为……""应含以下……"）时，须将规定中的**每一项都单独写成一条**，每条可为一句或数句（尽量保留原文关键表述），**不要**只写一句概括如"需交付实施标准"或"需包括A、B、C等"。即：招标规定得细的，BIM要求里也要逐条展开记录。
+- 明确数值、标准、要求请**直接引用原文**；列举处**每个子项单独成条**，不得整段概括为一句。
+- 模糊或隐含的要求标注"需重点关注"；缺失但通常重要的信息标注"文件中未明确"。
+- 带"必须""应当""不得"等强制性词汇的条款须特别标注。
+- 若文档按阶段/专业等分块，输出中可用【阶段名】或等价标题区分，便于后续按结构踩点响应。
 """
 
-ANALYZE_USER_TEMPLATE = """请深度分析以下招标文件，按照系统提示的9个维度进行全面提取：
+ANALYZE_USER_TEMPLATE = """请深度分析以下招标文件，按系统提示的**分析范围与重点**、**通用提取原则**与**常见重要信息类型**进行全面提取。
 
 """ + ANALYZE_CONTEXT_PLACEHOLDER + """
 
 请确保：
 
-1. 所有BIM相关要求都被提取（含成果交付、软硬件与人员配置）
+1. **BIM与技术标为重点**：BIM相关条款及影响技术标响应的通用条款（格式、评分、废标、项目信息、标准、时间节点等）按原则逐条展开；与BIM/技术标无直接关系的内容可简要带过或标注「非BIM/非技术标重点，略」。
 
-2. 建设目标与创新点、依据的标准与规范被单独提取
+2. **结构随文档**：按招标文件自身的章节、表格、列表与层级组织提取，不强制套入固定维度；若存在常见类型之外的章节或要求，按同一原则逐条提取，归入「其他重要要求」。
 
-3. 所有评分细则都被记录
+3. **列举与表格、规定须展开**：凡文档中有列举（列表、"包括…""具体为…""应含…"、多级编号）或表格，每一项/每一行**单独写成一条记录**，每条可为一句或数句（保留关键原文），不概括为一句；招标对某条要求有具体规定的，须拓展开逐条记录，不要只写一句"需包括XX"。
 
-4. 所有废标风险点都被标注
-
-5. 所有格式要求都被说明
+4. 常见类型中涉及的内容（BIM要求、建设目标与创新点、标准与规范、评分细则、废标风险、格式与时间节点等）均被识别并提取；明确数值与强制性表述原文保留并标注。
 """
 
 
@@ -210,38 +171,52 @@ FRAMEWORK_BIM_PLACEHOLDER = "{{#bim_requirements#}}"
 FRAMEWORK_SCORING_PLACEHOLDER = "{{#scoring_items#}}"
 FRAMEWORK_CONTEXT_PLACEHOLDER = "{{#context#}}"
 
-FRAMEWORK_SYSTEM = """你是BIM技术标框架设计专家。根据招标文件要求和知识库参考，生成投标文档的章节框架。
+FRAMEWORK_SYSTEM = """你是BIM技术标框架设计专家。根据招标文件分析、BIM要求、技术评分项和知识库参考，生成投标文档的**完整标题框架**，包括一级（章）、二级（节）、三级（小节）。
 
-## 标题层级约定
+## 标题层级与格式
 
-- **一级**：仅输出「第X章 标题」，每行一章。
-- 正文撰写时的层级为：二级 X.1、X.2，三级 X.1.1、X.1.2；三级之下再分用（1）（2）（3）…，不再使用四级标题。
+- **一级**：第X章 标题（X 为章节号）
+- **二级**：X.1、X.2、X.3 … 小节标题
+- **三级**：X.1.1、X.1.2、X.2.1 … 子节标题（三级之下正文用（1）（2）（3）分点，不再设四级标题）
 
-## 输出格式要求
+## 输出格式要求（必须严格遵守）
 
-每一章节必须按照以下格式输出，每行一个章节：
+每章按以下顺序输出：先写「第X章 标题」，紧接着写该章下的二级、三级标题，每行一条；再写下一章。示例：
 
 第1章 项目理解与分析
-
+1.1 项目概况
+1.2 建设目标及重难点
+1.2.1 总体建设目标
+1.2.2 创优、创新目标
 第2章 BIM技术实施方案
-
-第3章 BIM技术应用计划
-
+2.1 总体思路与实施模式
+2.2 设计阶段BIM应用
+2.2.1 方案设计
+2.2.2 初步设计
+2.2.3 施工图设计
+2.3 施工配合及竣工
+第3章 组织与保障措施
+3.1 项目组织架构
+3.2 质量、进度保障
 ...
 
-注意：必须使用"第X章"格式，章节标题简洁明确。框架末尾通常包含质量、进度、安全、组织等保障措施章节，确保不遗漏。
+- 必须使用「第X章」、「X.1」「X.1.1」格式；二级、三级标题简洁明确（约5–12字），体现评分项与招标要点。
+- **标题表述多样化**：不要大量使用「xx与xx」的对称句式；可交替使用「及」「以及」、顿号并列（如「质量、进度保障」）、偏正结构（如「实施模式」「组织架构」）等，使标题自然多样，避免过于工整。
+- 每章下至少 2 个二级节；需要细分的节下可设三级。框架末尾通常包含质量、进度、安全、组织等保障措施章节，确保不遗漏。
+- **禁止仅输出第X章**：每章下必须至少写出该章的二级标题（如 1.1、1.2），需要时写出三级（如 1.1.1、1.1.2）。每行一条，仅写编号与标题，不要使用 markdown 符号（如 ##）。编号使用半角数字与点，例如：1.1 项目概况
+- **错误示例（不可这样）**：只写「第1章 …\\n第2章 …\\n第3章 …」而没有 1.1、1.2 等。正确做法是每章后紧跟该章的 1.1、1.2、1.1.1… 等行。
 """
 
 # 仅在有用户要点时使用：只给「当前框架 + 用户要点」，不做其他信息干扰
-FRAMEWORK_SYSTEM_WITH_USER_POINTS = """你是BIM技术标框架设计专家。你只会收到两样内容：当前章节框架、用户的修改/补充要求。
+FRAMEWORK_SYSTEM_WITH_USER_POINTS = """你是BIM技术标框架设计专家。你只会收到两样内容：当前章节框架（含一级、二级、三级标题）、用户的修改/补充要求。
 
 规则（必须遵守）：
-1. 只对用户要求中明确提到的部分做增、删、改（例如用户要求增加「项目重难点」章节就只新增该章）。
-2. 用户未提及的章节：标题必须与「当前框架」中完全一致，不得改写、不得合并、不得删除、不得调序。
-3. 输出完整的新框架，每行一个章节，格式为"第X章 标题"，不要输出任何解释。
-4. 标题层级：此处仅输出一级（第X章）；正文中二级为 X.1、三级为 X.1.1，三级之下用（1）（2）（3）。"""
+1. 只对用户要求中明确提到的部分做增、删、改（例如用户要求增加「项目重难点」小节就只新增该条）。
+2. 用户未提及的章节与小节：必须与「当前框架」中完全一致，不得改写、不得合并、不得删除、不得调序。
+3. 输出完整的新框架，格式与当前框架相同：每章为「第X章 标题」后紧跟该章的 X.1、X.1.1、X.2… 等二级、三级标题，每行一条，不要输出任何解释。
+4. 标题层级：一级 第X章；二级 X.1、X.2；三级 X.1.1、X.1.2。"""
 
-FRAMEWORK_USER_TEMPLATE = """请根据以下信息生成BIM技术标框架：
+FRAMEWORK_USER_TEMPLATE = """请根据以下信息生成BIM技术标的**完整标题框架**（一级 第X章 + 二级 X.1、X.2 + 三级 X.1.1、X.1.2），确保覆盖评分项与招标要点。
 
 招标分析：
 """ + FRAMEWORK_ANALYZE_PLACEHOLDER + """
@@ -254,22 +229,25 @@ BIM要求：
 
 知识库参考：
 """ + FRAMEWORK_CONTEXT_PLACEHOLDER + """
+
+请严格按以下格式逐章输出，每行一条：先写「第X章 标题」，紧接着写该章下的二级、三级标题（如 1.1 小节名、1.1.1 子节名、1.2 小节名…），再写下一章。**不得只输出第X章**，每章下必须至少包含二级标题行。
 """
 
 
 def _format_current_framework(chapters: list[dict]) -> str:
-    """Format chapters as '第N章 标题' lines for prompt."""
+    """Format chapters (with optional sections/subsections) as text for prompt."""
     if not chapters:
         return "（无）"
     lines = []
     for ch in chapters:
         full = ch.get("full_name")
-        if full:
-            lines.append(full)
-        else:
-            num = ch.get("number", "")
-            title = ch.get("title", "")
-            lines.append(f"第{num}章 {title}")
+        if not full:
+            full = f"第{ch.get('number', '')}章 {ch.get('title', '')}"
+        lines.append(full)
+        for sec in ch.get("sections") or []:
+            lines.append(f"{sec.get('number', '')} {sec.get('title', '')}")
+            for sub in sec.get("subsections") or []:
+                lines.append(f"{sub.get('number', '')} {sub.get('title', '')}")
     return "\n".join(lines)
 
 
@@ -320,29 +298,104 @@ def build_framework_messages(
 
 
 def parse_framework_text(framework_text: str) -> list[dict]:
-    """Parse framework LLM output into list of {number, title, full_name}.
+    """Parse framework LLM output into list of chapters with optional sections/subsections.
 
-    Expects lines like "第1章 项目理解与分析". Returns [] on no matches or error.
+    Expects lines: "第X章 标题", "X.1 小节标题", "X.1.1 子节标题".
+    Returns list of {number, title, full_name, sections?: [{number, title, subsections?: [{number, title}]}]}.
     """
     if not framework_text or not isinstance(framework_text, str):
         return []
-    pattern = r"第(\d+)章\s+(.+?)(?=\n|$)"
-    matches = re.findall(pattern, framework_text.strip(), re.MULTILINE)
-    chapters = []
-    for chapter_num_str, chapter_title in matches:
-        try:
-            num = int(chapter_num_str)
-        except ValueError:
+    lines = [ln.strip() for ln in framework_text.strip().splitlines() if ln.strip()]
+    chapters: list[dict] = []
+    current_chapter: dict | None = None
+    current_section: dict | None = None
+    # 去掉行首可能的 markdown 标题符
+    def _norm(line: str) -> str:
+        s = line.strip()
+        if s.startswith("### "):
+            return s[4:].strip()
+        if s.startswith("## "):
+            return s[3:].strip()
+        if s.startswith("# "):
+            return s[2:].strip()
+        return s
+    # 第X章
+    re_chapter = re.compile(r"^第(\d+)章\s*(?:[、\s]+)?(.+)$")
+    # X.Y 或 X.Y.Z（允许 1.1 标题 或 1.1、标题）
+    re_section = re.compile(r"^(\d+)\.(\d+)[\s、]+(.+)$")
+    re_subsection = re.compile(r"^(\d+)\.(\d+)\.(\d+)[\s、]+(.+)$")
+
+    for raw_line in lines:
+        line = _norm(raw_line)
+        if not line:
             continue
-        title = chapter_title.strip()
-        if not title:
+        m_ch = re_chapter.match(line)
+        if m_ch:
+            num = int(m_ch.group(1))
+            title = m_ch.group(2).strip()
+            if not title:
+                continue
+            current_chapter = {
+                "number": num,
+                "title": title,
+                "full_name": f"第{num}章 {title}",
+                "sections": [],
+            }
+            chapters.append(current_chapter)
+            current_section = None
             continue
-        chapters.append({
-            "number": num,
-            "title": title,
-            "full_name": f"第{chapter_num_str}章 {title}",
-        })
+
+        m_sub = re_subsection.match(line)
+        if m_sub:
+            num_str = f"{m_sub.group(1)}.{m_sub.group(2)}.{m_sub.group(3)}"
+            title = m_sub.group(4).strip()
+            if not title:
+                continue
+            parent_sec_num = f"{m_sub.group(1)}.{m_sub.group(2)}"
+            if current_chapter:
+                sections = current_chapter.get("sections") or []
+                # 找到所属二级（最后一个 number 为 parent_sec_num 的 section）
+                parent_sec = None
+                for s in reversed(sections):
+                    if s.get("number") == parent_sec_num:
+                        parent_sec = s
+                        break
+                if parent_sec:
+                    parent_sec.setdefault("subsections", []).append({"number": num_str, "title": title})
+                else:
+                    current_section = {"number": parent_sec_num, "title": "(本节)", "subsections": [{"number": num_str, "title": title}]}
+                    current_chapter.setdefault("sections", []).append(current_section)
+            continue
+
+        m_sec = re_section.match(line)
+        if m_sec:
+            num_str = f"{m_sec.group(1)}.{m_sec.group(2)}"
+            title = m_sec.group(3).strip()
+            if not title:
+                continue
+            if current_chapter and int(m_sec.group(1)) == current_chapter.get("number"):
+                current_section = {"number": num_str, "title": title, "subsections": []}
+                current_chapter.setdefault("sections", []).append(current_section)
+            continue
+
     return chapters
+
+
+def framework_chapter_to_outline(chapter: dict) -> str:
+    """Format a framework chapter (with optional sections/subsections) as outline text for content LLM.
+
+    Returns e.g. "1.1 项目概况\\n1.2 建设目标\\n1.2.1 总体目标\\n1.2.2 创优目标".
+    If chapter has no sections, returns empty string (caller should use outline LLM).
+    """
+    sections = chapter.get("sections")
+    if not sections:
+        return ""
+    lines = []
+    for sec in sections:
+        lines.append(f"{sec.get('number', '')} {sec.get('title', '')}")
+        for sub in sec.get("subsections") or []:
+            lines.append(f"{sub.get('number', '')} {sub.get('title', '')}")
+    return "\n".join(lines).strip()
 
 
 # --- Chapter outline and content (stage 4.1) ---
@@ -382,7 +435,7 @@ X.2.2 子节标题2-2
 X.3 小节标题3
 ...
 
-注意：**必须使用"X.1"或"X.1.1"格式**，不要超过三级；标题简洁明确（5-10字），应包含评分项关键词，采用技术标/BIM 行业常用表述；小节之间逻辑连贯，覆盖章节的所有关键评分项。"""
+注意：**必须使用"X.1"或"X.1.1"格式**，不要超过三级；标题简洁明确（5-10字），应包含评分项关键词，采用技术标/BIM 行业常用表述；小节之间逻辑连贯，覆盖章节的所有关键评分项。标题表述可多样化，不必统一用「xx与xx」，可交替使用「及」、顿号并列、偏正结构等，避免过于工整对称。"""
 
 
 def build_chapter_outline_messages(

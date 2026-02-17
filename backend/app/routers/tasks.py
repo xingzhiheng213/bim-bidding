@@ -437,7 +437,7 @@ def accept_framework_step(
 
 
 def _framework_snapshot_to_text(snapshot_json: str | None) -> str:
-    """Format framework output_snapshot JSON as comparable text (one line per chapter)."""
+    """Format framework output_snapshot JSON as comparable text (chapters + sections + subsections)."""
     if not snapshot_json:
         return ""
     try:
@@ -447,6 +447,10 @@ def _framework_snapshot_to_text(snapshot_json: str | None) -> str:
         for c in chapters:
             full_name = c.get("full_name") or f"第{c.get('number', '')}章 {c.get('title', '')}"
             lines.append(full_name.strip())
+            for sec in c.get("sections") or []:
+                lines.append(f"  {sec.get('number', '')} {sec.get('title', '')}")
+                for sub in sec.get("subsections") or []:
+                    lines.append(f"    {sub.get('number', '')} {sub.get('title', '')}")
         return "\n".join(lines)
     except (json.JSONDecodeError, TypeError):
         return ""

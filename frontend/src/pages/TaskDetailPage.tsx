@@ -168,12 +168,14 @@ function TaskDetailPage() {
   const frameworkStep = data?.steps?.find((s) => s.step_key === 'framework')
   const frameworkStepDone =
     frameworkStep?.status === 'completed' || frameworkStep?.status === 'waiting_user'
-  let frameworkChapters: { number: number; title: string; full_name: string }[] = []
+  type FrameworkSection = { number?: string; title?: string; subsections?: { number?: string; title?: string }[] }
+  type FrameworkChapter = { number: number; title: string; full_name: string; sections?: FrameworkSection[] }
+  let frameworkChapters: FrameworkChapter[] = []
   let frameworkExtraPoints: string[] = []
   if (frameworkStepDone && frameworkStep?.output_snapshot) {
     try {
       const out = JSON.parse(frameworkStep.output_snapshot) as {
-        chapters?: { number: number; title: string; full_name: string }[]
+        chapters?: FrameworkChapter[]
         extra_points?: string[]
       }
       frameworkChapters = Array.isArray(out.chapters) ? out.chapters : []
@@ -873,7 +875,27 @@ function TaskDetailPage() {
                           defaultActiveKey={[]}
                           style={{ marginTop: designTokens.marginSM }}
                           items={[
-                            ...(frameworkChapters.length > 0 ? [{ key: 'chapters', label: '章节框架', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{frameworkChapters.map((ch, i) => <li key={i}><Text strong>第{ch.number}章</Text> {ch.title}</li>)}</ul> }] : []),
+                            ...(frameworkChapters.length > 0 ? [{ key: 'chapters', label: '章节框架', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{frameworkChapters.map((ch, i) => (
+                              <li key={i}>
+                                <Text strong>第{ch.number}章</Text> {ch.title}
+                                {Array.isArray(ch.sections) && ch.sections.length > 0 && (
+                                  <ul style={{ marginBottom: 0, paddingLeft: 20, marginTop: 4 }}>
+                                    {ch.sections.map((sec, j) => (
+                                      <li key={j}>
+                                        {sec.number} {sec.title}
+                                        {Array.isArray(sec.subsections) && sec.subsections.length > 0 && (
+                                          <ul style={{ marginBottom: 0, paddingLeft: 20, marginTop: 2 }}>
+                                            {sec.subsections.map((sub, k) => (
+                                              <li key={k}>{sub.number} {sub.title}</li>
+                                            ))}
+                                          </ul>
+                                        )}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </li>
+                            ))}</ul> }] : []),
                             ...(frameworkStep?.status === 'completed' && frameworkExtraPoints.length > 0 ? [{ key: 'points', label: '已添加要点', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{frameworkExtraPoints.map((p, i) => <li key={i}>{p}</li>)}</ul> }] : []),
                           ]}
                         />
