@@ -19,7 +19,7 @@ function getTaskStatusDisplay(status: string): { tagColor: 'default' | 'primary'
   return { tagColor: 'default', label: status || '待执行' }
 }
 
-function HomePage() {
+function OneClickPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [createModalOpen, setCreateModalOpen] = useState(false)
@@ -36,7 +36,7 @@ function HomePage() {
     onSuccess: (res) => {
       message.success('任务已创建')
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
-      navigate(`/tasks/${res.id}`)
+      navigate(`/one-click/tasks/${res.id}`)
     },
     onError: (e: unknown) => {
       const detail =
@@ -107,7 +107,7 @@ function HomePage() {
       width: 140,
       render: (_, record) => (
         <span onClick={(e) => e.stopPropagation()}>
-          <Link to={`/tasks/${record.id}`} style={{ marginRight: designTokens.marginXS }}>
+          <Link to={`/one-click/tasks/${record.id}`} style={{ marginRight: designTokens.marginXS }}>
             进入
           </Link>
           <Popconfirm
@@ -126,10 +126,10 @@ function HomePage() {
   return (
     <>
       <Title level={2} style={{ marginBottom: designTokens.marginLG }}>
-        我的任务
+        一键生成
       </Title>
       <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginLG }}>
-        分步制作、精细控制，可随时校审与对比
+        上传招标文件后自动完成解析、分析、框架与正文生成，仅需在生成框架后确认一次即可。
       </Text>
       <div style={{ marginBottom: designTokens.marginLG }}>
         <Button
@@ -159,14 +159,14 @@ function HomePage() {
           <Text type="secondary">任务名称（可选）：</Text>
         </div>
         <Input
-          placeholder="例如：XX项目BIM技术标（2026版）"
+          placeholder="例如：XX项目BIM技术标"
           value={createTaskName}
           onChange={(e) => setCreateTaskName(e.target.value)}
           maxLength={255}
           allowClear
         />
         <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
-          不填写将自动生成默认名称，后续也可重命名。
+          不填写将自动生成默认名称，创建后进入任务上传招标文件并开始生成。
         </Text>
       </Modal>
       <Title level={5} style={{ marginTop: designTokens.marginXL, marginBottom: designTokens.marginSM }}>
@@ -181,7 +181,7 @@ function HomePage() {
         locale={{
           emptyText: (
             <div style={{ padding: designTokens.paddingLG }}>
-              <Empty description="暂无任务，点击下方按钮创建第一个标书任务">
+              <Empty description="暂无任务，点击下方按钮创建第一个一键生成任务">
                 <Button
                   type="primary"
                   loading={createMutation.isPending}
@@ -194,7 +194,7 @@ function HomePage() {
           ),
         }}
         onRow={(record) => ({
-          onClick: () => navigate(`/tasks/${record.id}`),
+          onClick: () => navigate(`/one-click/tasks/${record.id}`),
           style: { cursor: 'pointer' },
         })}
       />
@@ -202,4 +202,4 @@ function HomePage() {
   )
 }
 
-export default HomePage
+export default OneClickPage

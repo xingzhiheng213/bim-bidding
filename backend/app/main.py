@@ -67,6 +67,20 @@ async def startup():
         else:
             logger.warning("Could not add name to tasks: %s", e)
 
+    # Add celery_task_id to task_steps if missing (for one-click cancel revoke)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE task_steps ADD COLUMN celery_task_id VARCHAR(255)"
+            ))
+            conn.commit()
+        logger.info("Added column celery_task_id to task_steps")
+    except Exception as e:
+        if "already exists" in str(e).lower() or "duplicate" in str(e).lower():
+            logger.debug("Column celery_task_id already exists")
+        else:
+            logger.warning("Could not add celery_task_id: %s", e)
+
 
 @app.get("/health")
 def health():

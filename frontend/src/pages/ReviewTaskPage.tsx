@@ -165,7 +165,6 @@ function ReviewTaskPage() {
   const chaptersStep = task?.steps?.find((s) => s.step_key === 'chapters')
   const reviewStep = task?.steps?.find((s) => s.step_key === 'review')
   const chaptersCompleted = chaptersStep?.status === 'completed' && !!chaptersStep?.output_snapshot
-  const canStartReview = chaptersCompleted && (!reviewStep || reviewStep.status === 'pending' || reviewStep.status === 'failed')
   const reviewRunning = reviewStep?.status === 'running'
   const reviewCompleted = reviewStep?.status === 'completed'
   const reviewFailed = reviewStep?.status === 'failed'

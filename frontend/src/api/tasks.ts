@@ -58,6 +58,17 @@ export async function deleteTask(id: string): Promise<void> {
   await api.delete(`/api/tasks/${id}`)
 }
 
+export interface CancelTaskResponse {
+  message: string
+  revoked: boolean
+  step_key?: string
+}
+
+export async function cancelTask(taskId: string): Promise<CancelTaskResponse> {
+  const { data } = await api.post<CancelTaskResponse>(`/api/tasks/${taskId}/cancel`)
+  return data
+}
+
 export interface UploadTaskFileResponse {
   step_key: string
   status: string

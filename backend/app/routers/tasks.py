@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app import config
@@ -30,6 +30,7 @@ from app.schemas.task import (
     TaskStepSchema,
     TaskSummary,
 )
+from celery_app import app as celery_app
 from tasks.analyze import run_analyze
 from tasks.chapters import regenerate_all_chapters_from_review, regenerate_chapter, run_chapters
 from tasks.extract import run_extract
@@ -96,6 +97,31 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.delete(task)
     db.commit()
     return None
+
+
+@router.post("/{task_id}/cancel", status_code=200)
+def cancel_task(task_id: int, db: Session = Depends(get_db)):
+    """Revoke the currently running Celery step for this task (e.g. one-click cancel)."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    running = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.status == "running")
+        .first()
+    )
+    if not running:
+        return {"message": "当前无正在执行的步骤", "revoked": False}
+    celery_task_id = running.celery_task_id
+    if celery_task_id:
+        try:
+            celery_app.control.revoke(celery_task_id, terminate=True)
+        except Exception:
+            pass
+    running.status = "pending"
+    running.celery_task_id = None
+    db.commit()
+    return {"message": "已取消当前步骤", "revoked": True, "step_key": running.step_key}
 
 
 @router.post("/{task_id}/upload", status_code=201)
@@ -208,7 +234,9 @@ def run_extract_step(task_id: int, db: Session = Depends(get_db)):
     extract_step.error_message = None
     db.commit()
 
-    run_extract.delay(task_id)
+    result = run_extract.delay(task_id)
+    extract_step.celery_task_id = result.id
+    db.commit()
     return {"message": "解析已入队", "step_key": "extract"}
 
 
@@ -249,7 +277,9 @@ def run_analyze_step(task_id: int, db: Session = Depends(get_db)):
     analyze_step.error_message = None
     db.commit()
 
-    run_analyze.delay(task_id)
+    result = run_analyze.delay(task_id)
+    analyze_step.celery_task_id = result.id
+    db.commit()
     return {"message": "分析已入队", "step_key": "analyze"}
 
 
@@ -290,7 +320,9 @@ def run_params_step(task_id: int, db: Session = Depends(get_db)):
     params_step.error_message = None
     db.commit()
 
-    run_params.delay(task_id)
+    result = run_params.delay(task_id)
+    params_step.celery_task_id = result.id
+    db.commit()
     return {"message": "参数提取已入队", "step_key": "params"}
 
 
@@ -331,7 +363,9 @@ def run_framework_step(task_id: int, db: Session = Depends(get_db)):
     framework_step.error_message = None
     db.commit()
 
-    run_framework.delay(task_id)
+    result = run_framework.delay(task_id)
+    framework_step.celery_task_id = result.id
+    db.commit()
     return {"message": "框架已入队", "step_key": "framework"}
 
 
@@ -358,7 +392,9 @@ def regenerate_framework_step(task_id: int, db: Session = Depends(get_db)):
     framework_step.error_message = None
     db.commit()
 
-    run_framework.delay(task_id)
+    result = run_framework.delay(task_id)
+    framework_step.celery_task_id = result.id
+    db.commit()
     return {"message": "框架已重新入队", "step_key": "framework"}
 
 
@@ -579,7 +615,9 @@ def run_chapters_step(
     )
     db.commit()
 
-    run_chapters.delay(task_id, chapter_numbers=chapter_numbers)
+    result = run_chapters.delay(task_id, chapter_numbers=chapter_numbers)
+    chapters_step.celery_task_id = result.id
+    db.commit()
     return {"message": "按章生成已入队", "step_key": "chapters"}
 
 
@@ -670,7 +708,9 @@ def regenerate_chapter_step(
     chapters_step.output_snapshot = json.dumps(output, ensure_ascii=False)
     db.commit()
 
-    regenerate_chapter.delay(task_id, body.chapter_number)
+    result = regenerate_chapter.delay(task_id, body.chapter_number)
+    chapters_step.celery_task_id = result.id
+    db.commit()
     return {"message": "该章已重新入队", "step_key": "chapters"}
 
 
@@ -735,7 +775,9 @@ def run_review_step(
         review_step.status = "running"
         review_step.error_message = None
         db.commit()
-        run_review_chapter.delay(task_id, chapter_number)
+        result = run_review_chapter.delay(task_id, chapter_number)
+        review_step.celery_task_id = result.id
+        db.commit()
         return {"message": "单章审查已入队", "step_key": "review"}
 
     if review_step.status == "running":
@@ -745,7 +787,9 @@ def run_review_step(
     review_step.error_message = None
     db.commit()
 
-    run_review.delay(task_id)
+    result = run_review.delay(task_id)
+    review_step.celery_task_id = result.id
+    db.commit()
     return {"message": "审查已入队", "step_key": "review"}
 
 
@@ -787,9 +831,13 @@ def accept_review_step(
         ch_out["chapter_points"] = {}
     ch_out["chapter_points"][str(body.chapter_number)] = body.accepted_items
     chapters_step.output_snapshot = json.dumps(ch_out, ensure_ascii=False)
+    chapters_step.status = "running"
+    chapters_step.error_message = None
     db.commit()
 
-    regenerate_chapter.delay(task_id, body.chapter_number)
+    result = regenerate_chapter.delay(task_id, body.chapter_number)
+    chapters_step.celery_task_id = result.id
+    db.commit()
     return {"message": "已接受校审意见，该章已加入重生成队列", "step_key": "chapters"}
 
 
@@ -822,7 +870,12 @@ def regenerate_all_from_review_step(task_id: int, db: Session = Depends(get_db))
     if not review_step or review_step.status != "completed" or not review_step.output_snapshot:
         raise HTTPException(status_code=400, detail="请先完成校审")
 
-    regenerate_all_chapters_from_review.delay(task_id)
+    chapters_step.status = "running"
+    chapters_step.error_message = None
+    db.commit()
+    result = regenerate_all_chapters_from_review.delay(task_id)
+    chapters_step.celery_task_id = result.id
+    db.commit()
     return {"message": "已入队，将按章顺序重生成全部章节", "step_key": "chapters"}
 
 
@@ -842,10 +895,10 @@ def download_docx(task_id: int, db: Session = Depends(get_db)):
     doc = markdown_to_docx(md, format_options)
     buffer = io.BytesIO()
     doc.save(buffer)
-    buffer.seek(0)
+    body = buffer.getvalue()
 
-    return StreamingResponse(
-        buffer,
+    return Response(
+        content=body,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
             "Content-Disposition": (

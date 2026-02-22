@@ -13,9 +13,10 @@ const { Title } = Typography
 const SIDER_WIDTH = 220
 
 const mainNavItems = [
-  { key: '/', label: '首页' },
+  { key: '/one-click', label: '一键生成' },
+  { key: '/', label: '高级生成' },
   { key: '/compare', label: '对比' },
-  { key: '/review', label: '校审' },
+  { key: '/review', label: '标书校审' },
 ]
 const bottomNavItems = [{ key: '/settings', label: '设置' }]
 
@@ -30,15 +31,17 @@ export default function AppLayout() {
   const selectedKey =
     location.pathname === '/'
       ? '/'
-      : location.pathname.startsWith('/settings')
-        ? '/settings'
-        : location.pathname.startsWith('/compare')
-          ? '/compare'
-          : location.pathname.startsWith('/review')
-            ? '/review'
-            : location.pathname.startsWith('/tasks')
-              ? '/'
-              : location.pathname
+      : location.pathname.startsWith('/one-click')
+        ? '/one-click'
+        : location.pathname.startsWith('/settings')
+          ? '/settings'
+          : location.pathname.startsWith('/compare')
+            ? '/compare'
+            : location.pathname.startsWith('/review')
+              ? '/review'
+              : location.pathname.startsWith('/tasks')
+                ? '/'
+                : location.pathname
 
   return (
     <Layout style={{ minHeight: '100vh' }}>

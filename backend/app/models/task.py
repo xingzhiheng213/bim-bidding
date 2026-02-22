@@ -36,6 +36,8 @@ class TaskStep(Base):
     # Snapshot of output before last regenerate (for diff: 要点变更前). Framework: full JSON; chapters: JSON {"chapter_N": "text"}.
     output_snapshot_before_regenerate: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Celery task id for this step when status=running; used to revoke on one-click cancel
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
