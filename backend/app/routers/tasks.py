@@ -828,7 +828,7 @@ def regenerate_all_from_review_step(task_id: int, db: Session = Depends(get_db))
 
 @router.get("/{task_id}/download")
 def download_docx(task_id: int, db: Session = Depends(get_db)):
-    """Generate DOCX from assembled Markdown and return as file stream."""
+    """Generate DOCX from assembled Markdown (chapters + 附录)."""
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")

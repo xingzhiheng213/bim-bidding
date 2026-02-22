@@ -45,43 +45,6 @@ export async function postSettingsLlm(
   return data
 }
 
-// --- Model config (default + per-step) ---
-
-export interface SupportedModel {
-  id: string
-  name: string
-  provider: string
-}
-
-export interface GetSettingsModelsResponse {
-  default_model: string
-  steps: {
-    analyze: string | null
-    params: string | null
-    framework: string | null
-    chapters: string | null
-  }
-  supported_models: SupportedModel[]
-}
-
-export async function getSettingsModels(): Promise<GetSettingsModelsResponse> {
-  const { data } = await api.get<GetSettingsModelsResponse>('/api/settings/models')
-  return data
-}
-
-export interface PostSettingsModelsBody {
-  default_model?: string | null
-  analyze_model?: string | null
-  params_model?: string | null
-  framework_model?: string | null
-  chapters_model?: string | null
-}
-
-export async function postSettingsModels(body: PostSettingsModelsBody): Promise<GetSettingsModelsResponse> {
-  const { data } = await api.post<GetSettingsModelsResponse>('/api/settings/models', body)
-  return data
-}
-
 // --- Export format (stage 7.3) ---
 
 export interface ExportFormatConfig {

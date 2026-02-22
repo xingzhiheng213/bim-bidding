@@ -34,12 +34,8 @@ EXPORT_DIR: Path = (
 
 # LLM: API keys and base URLs (env only in 2.1; settings table in stage 5)
 DEEPSEEK_API_KEY: str = os.getenv("DEEPSEEK_API_KEY", "")
-ZHIPU_API_KEY: str = os.getenv("ZHIPU_API_KEY", "")
 DEEPSEEK_BASE_URL: str = os.getenv(
     "DEEPSEEK_BASE_URL", "https://api.deepseek.com"
-).rstrip("/")
-ZHIPU_BASE_URL: str = os.getenv(
-    "ZHIPU_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"
 ).rstrip("/")
 
 # LLM HTTP timeout (seconds): read timeout for long analysis/framework responses
@@ -48,7 +44,7 @@ LLM_TIMEOUT_READ: float = float(os.getenv("LLM_TIMEOUT_READ", "180"))
 # LLM max completion tokens (output length). Default 8K; can be overridden via env.
 LLM_MAX_TOKENS: int = int(os.getenv("LLM_MAX_TOKENS", "8192"))
 
-# Analyze step (stage 2.2): default deepseek / deepseek-chat (zhipu 已取消测试)
+# Analyze step (stage 2.2): default deepseek / deepseek-chat
 ANALYZE_LLM_PROVIDER: str = os.getenv("ANALYZE_LLM_PROVIDER", "deepseek")
 ANALYZE_LLM_MODEL: str = os.getenv("ANALYZE_LLM_MODEL", "deepseek-chat")
 
@@ -104,14 +100,14 @@ def get_ragflow_dataset_ids() -> list[str]:
 
 
 def get_llm_api_key(provider: str) -> str | None:
-    """Return API key for provider (deepseek/zhipu); from DB first, then env; None if not set."""
+    """Return API key for provider (deepseek); from DB first, then env; None if not set."""
     from app.settings_store import get_api_key_from_db
     key = get_api_key_from_db(provider)
     if key:
         return key
-    key = (DEEPSEEK_API_KEY if provider == "deepseek" else
-           ZHIPU_API_KEY if provider == "zhipu" else None)
-    return key if key else None
+    if provider == "deepseek":
+        return DEEPSEEK_API_KEY or None
+    return None
 
 
 def get_llm_base_url(provider: str) -> str:
@@ -122,6 +118,4 @@ def get_llm_base_url(provider: str) -> str:
         return url.rstrip("/")
     if provider == "deepseek":
         return DEEPSEEK_BASE_URL.rstrip("/")
-    if provider == "zhipu":
-        return ZHIPU_BASE_URL.rstrip("/")
     raise ValueError(f"Unknown provider: {provider}")

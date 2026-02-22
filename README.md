@@ -30,7 +30,7 @@
    - 后端健康检查：`http://localhost:8001/health`
 
 4. 首次进入应用后：
-   - 打开「设置」页面，配置你的大模型 API Key（如 DeepSeek、智谱等）。
+   - 打开「设置」页面，配置 DeepSeek 大模型 API Key。
    - 回到首页，创建任务并上传招标文件，按界面提示依次完成分析、框架、按章生成与导出。
 
 如需查看更详细的 Docker 使用说明，请阅读 `Docker/README.md`。

@@ -1,23 +1,20 @@
-"""Settings API: LLM API keys, base URLs, and model config (stage 5.1)."""
+"""Settings API: LLM API keys, base URLs, export format, knowledge base (stage 5.1)."""
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.knowledge_base import test_ragflow_connection
-from app.model_registry import list_supported_models
 from app.settings_store import (
     clear_llm_config,
     get_all_providers_status,
     get_export_format_config,
     get_kb_config,
-    get_model_config,
     get_ragflow_effective,
     get_supported_export_fonts,
     set_api_key_in_db,
     set_export_format_config,
     set_kb_config,
-    set_model_config,
     update_base_url_in_db,
     SUPPORTED_PROVIDERS,
 )
@@ -26,7 +23,7 @@ router = APIRouter(tags=["settings"])
 
 
 class PostLlmBody(BaseModel):
-    provider: Literal["deepseek", "zhipu"] = Field(..., description="LLM provider")
+    provider: Literal["deepseek"] = Field(..., description="LLM provider")
     api_key: str | None = Field(None, description="API key (plain); omit or empty to keep current")
     base_url: str | None = Field(None, description="Base URL; omit to keep current, empty string to clear")
     clear: bool = Field(False, description="If true, remove stored API key and base_url for this provider")
@@ -94,69 +91,6 @@ def post_settings_llm(body: PostLlmBody):
                 "base_url": s.get("base_url"),
             }
     return {"provider": body.provider, "configured": False, "masked_key": None, "base_url": None}
-
-
-# --- Model config (default + per-step) ---
-
-
-class PostModelsBody(BaseModel):
-    default_model: str | None = Field(None, description="Default model for all steps")
-    analyze_model: str | None = Field(None, description="Model for analyze step; empty = use default")
-    params_model: str | None = Field(None, description="Model for params step; empty = use default")
-    framework_model: str | None = Field(None, description="Model for framework step; empty = use default")
-    chapters_model: str | None = Field(None, description="Model for chapters step; empty = use default")
-
-
-@router.get("/models")
-def get_settings_models():
-    """Return default model, per-step overrides, and list of supported models for UI.
-    supported_models is filtered to only include models whose provider has an API key configured."""
-    try:
-        cfg = get_model_config()
-    except Exception:
-        cfg = {
-            "default_model": "deepseek-chat",
-            "analyze_model": None,
-            "params_model": None,
-            "framework_model": None,
-            "chapters_model": None,
-        }
-    status_list = get_all_providers_status()
-    configured_providers = {s["provider"] for s in status_list if s.get("configured")}
-    all_models = list_supported_models()
-    supported_models = [m for m in all_models if m.get("provider") in configured_providers]
-    return {
-        "default_model": cfg["default_model"],
-        "steps": {
-            "analyze": cfg.get("analyze_model"),
-            "params": cfg.get("params_model"),
-            "framework": cfg.get("framework_model"),
-            "chapters": cfg.get("chapters_model"),
-        },
-        "supported_models": supported_models,
-    }
-
-
-@router.post("/models")
-def post_settings_models(body: PostModelsBody):
-    """Save default model and/or per-step model overrides."""
-    set_model_config(
-        default_model=body.default_model,
-        analyze_model=body.analyze_model,
-        params_model=body.params_model,
-        framework_model=body.framework_model,
-        chapters_model=body.chapters_model,
-    )
-    cfg = get_model_config()
-    return {
-        "default_model": cfg["default_model"],
-        "steps": {
-            "analyze": cfg.get("analyze_model"),
-            "params": cfg.get("params_model"),
-            "framework": cfg.get("framework_model"),
-            "chapters": cfg.get("chapters_model"),
-        },
-    }
 
 
 # --- Export format (stage 7.1) ---

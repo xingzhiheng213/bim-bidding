@@ -12,7 +12,7 @@ from app.models import LlmSetting, PlatformLlmConfig, ExportFormatSetting, KbSet
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_PROVIDERS = ("deepseek", "zhipu")
+SUPPORTED_PROVIDERS = ("deepseek",)
 
 # Fixed dev placeholder key so FastAPI and Celery workers decrypt the same stored API keys when SETTINGS_SECRET_KEY is unset. Must decode to 32 bytes.
 _DEV_PLACEHOLDER_KEY = base64.urlsafe_b64encode(b"dev-placeholder-key-32bytes!!!!!")

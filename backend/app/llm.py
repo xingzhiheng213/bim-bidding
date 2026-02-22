@@ -21,8 +21,8 @@ def call_llm(
     """Call LLM via OpenAI-compatible chat completions; return content or raise.
 
     Args:
-        provider: "deepseek" or "zhipu" (used for default base_url and key lookup).
-        model: Model name (e.g. deepseek-chat, glm-4-flash).
+        provider: "deepseek" (used for default base_url and key lookup).
+        model: Model name (e.g. deepseek-chat, deepseek-v3).
         messages: OpenAI format, e.g. [{"role": "user", "content": "..."}].
         temperature: 0..1.
         api_key: If None, taken from config.get_llm_api_key(provider).

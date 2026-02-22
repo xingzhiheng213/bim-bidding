@@ -43,15 +43,14 @@ def project_info_to_markdown(project_info: dict | None) -> str:
 def assemble_full_markdown(task_id: int, db: Session) -> str:
     """Assemble full Markdown from params + framework + chapters steps.
 
-    Structure: # BIM技术标完整文档 -> ## 项目信息 -> --- -> chapters -> --- -> ## 附录 -> ### 风险点提醒.
+    Structure: chapters -> --- -> ## 附录 -> ### 风险点提醒.
+    Cover and project info are no longer in body (handled separately in export).
 
     Args:
         task_id: Task ID.
         db: SQLAlchemy session.
-
     Returns:
         Full Markdown string.
-
     Raises:
         ValueError: If any required step is missing or data is invalid.
     """
@@ -111,18 +110,7 @@ def assemble_full_markdown(task_id: int, db: Session) -> str:
     if not isinstance(chapters_dict, dict):
         chapters_dict = {}
 
-    project_info_md = project_info_to_markdown(project_info)
-
-    parts = [
-        "# BIM技术标完整文档",
-        "",
-        "## 项目信息",
-        "",
-        project_info_md if project_info_md else "（暂无）",
-        "",
-        "---",
-        "",
-    ]
+    parts = []
 
     for ch in chapters_list:
         num = ch.get("number")

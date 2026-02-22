@@ -5,15 +5,25 @@ Handles # ## ### headings, - lists, paragraphs, **bold**, *italic*, tables (opti
 Stage 7.2: supports format_options for heading/body/table font, first_line_indent, line_spacing.
 Word OOXML: font.name sets w:ascii/w:hAnsi (Latin); Chinese uses w:eastAsia, so we set both.
 """
+from __future__ import annotations
+
 import re
 import markdown
 from bs4 import BeautifulSoup
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
 from docx.oxml import parse_xml
 from docx.oxml.ns import qn
 from docx.shared import Pt
 
 from app.settings_store import DEFAULT_EXPORT_FORMAT
+
+# Cover page title default font size (pt)
+COVER_TITLE_SIZE_PT = 26
+# TOC: indent per level (pt) - only used when not using TOC field
+TOC_INDENT_PT_PER_LEVEL = 24
+# Word OOXML namespace for parse_xml
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
 def _set_run_font_name(run, font_name: str) -> None:
@@ -337,6 +347,28 @@ def _strip_bold_outside_tables(markdown_text: str) -> str:
     return "\n".join(out)
 
 
+def _extract_scoring_comment(text: str) -> str | None:
+    """If paragraph is '（评分响应：...）' or '（（评分响应：...））', return the comment text; else None."""
+    if not text or not isinstance(text, str):
+        return None
+    s = text.strip()
+    while len(s) >= 2 and s[0] in "（(" and s[-1] in "）)":
+        s = s[1:-1].strip()
+    if s.startswith("评分响应：") or s.startswith("评分响应:"):
+        return s.strip()
+    return None
+
+
+def _apply_pending_comment(doc: Document, p, pending_comment: str | None) -> bool:
+    """If pending_comment is set and p has runs, add it as a Word comment to p. Returns True if comment was added."""
+    if not pending_comment or not p or not getattr(p, "runs", None):
+        return False
+    if list(p.runs):
+        doc.add_comment(p.runs, text=pending_comment, author="评分说明", initials="")
+        return True
+    return False
+
+
 def _parse_raw_markdown_table(text: str) -> tuple[list[list[str]], str] | None:
     """If text contains raw markdown table (pipes and dashes), return (cell_texts, leading_text); else None.
 
@@ -374,17 +406,71 @@ def _parse_raw_markdown_table(text: str) -> tuple[list[list[str]], str] | None:
     return (rows, leading_text)
 
 
-def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> Document:
-    """Convert Markdown string to python-docx Document.
+def add_cover_page(doc: Document, title: str, opts: dict) -> None:
+    """Add a cover page: one centered title paragraph, then page break."""
+    p = doc.add_paragraph(title.strip() or "请输入BIM技术标标题")
+    p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    for run in p.runs:
+        font_name = opts.get("heading_1_font") or opts.get("body_font")
+        if font_name:
+            _set_run_font_name(run, font_name)
+        run.font.size = Pt(opts.get("heading_1_size_pt") or COVER_TITLE_SIZE_PT)
+    run = p.add_run()
+    run.add_break(WD_BREAK.PAGE)
+
+
+def _add_toc_field_paragraph(doc: Document) -> None:
+    """Append a paragraph containing a Word TOC field. Word/WPS will show placeholder until user updates the field."""
+    p = doc.add_paragraph()
+    # TOC field: begin, instrText, separate, end (each in its own w:r)
+    p._element.append(
+        parse_xml(
+            f'<w:r xmlns:w="{W_NS}"><w:fldChar w:fldCharType="begin"/></w:r>'
+        )
+    )
+    p._element.append(
+        parse_xml(
+            f'<w:r xmlns:w="{W_NS}"><w:instrText xml:space="preserve"> TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r>'
+        )
+    )
+    p._element.append(
+        parse_xml(
+            f'<w:r xmlns:w="{W_NS}"><w:fldChar w:fldCharType="separate"/></w:r>'
+        )
+    )
+    p._element.append(
+        parse_xml(
+            f'<w:r xmlns:w="{W_NS}"><w:fldChar w:fldCharType="end"/></w:r>'
+        )
+    )
+
+
+def add_toc_page(doc: Document, toc_entries: list[tuple[int, str]], opts: dict) -> None:
+    """Add a TOC page: '目录' heading, then a TOC field (Word/WPS 更新域后可生成三级目录), then page break."""
+    p = doc.add_heading("目录", level=1)
+    _apply_heading_style(p, 1, opts)
+    _add_toc_field_paragraph(doc)
+    run = doc.add_paragraph().add_run()
+    run.add_break(WD_BREAK.PAGE)
+
+
+def markdown_to_docx(
+    markdown_text: str,
+    format_options: dict | None = None,
+    doc: Document | None = None,
+) -> Document:
+    """Convert Markdown string to python-docx Document (or append to existing doc).
 
     Handles # ## ### headings, - lists, paragraphs, **bold**, *italic*, tables.
     format_options: optional dict from get_export_format_config(); merged with DEFAULT_EXPORT_FORMAT.
-    Returns a Document instance (call .save() to write to file).
+    doc: if provided, content is appended to this document; otherwise a new Document is created.
+    Returns the Document instance (call .save() to write to file).
     """
     opts = {**DEFAULT_EXPORT_FORMAT, **(format_options or {})}
+    if doc is None:
+        doc = Document()
 
     if not markdown_text or not markdown_text.strip():
-        doc = Document()
         p = doc.add_paragraph("（无内容）")
         _apply_body_style(p, opts)
         return doc
@@ -399,11 +485,11 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
         extensions=["tables", "fenced_code", "nl2br"],
     )
     soup = BeautifulSoup(html, "html.parser")
-
-    doc = Document()
     root = soup.find("body") or soup
     children = [c for c in root.children if hasattr(c, "name") and c.name is not None]
     skip_until = -1
+    last_paragraph = None
+    pending_comment = None
 
     for i, elem in enumerate(children):
         if i <= skip_until:
@@ -414,8 +500,18 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
             level = int(elem.name[1])
             p = doc.add_heading(elem.get_text(strip=True), level=level)
             _apply_heading_style(p, level, opts)
+            if _apply_pending_comment(doc, p, pending_comment):
+                pending_comment = None
+            last_paragraph = p
         elif elem.name == "p":
             text = elem.get_text(strip=True)
+            comment_text = _extract_scoring_comment(text)
+            if comment_text is not None:
+                if last_paragraph and list(getattr(last_paragraph, "runs", [])):
+                    doc.add_comment(last_paragraph.runs, text=comment_text, author="评分说明", initials="")
+                else:
+                    pending_comment = comment_text
+                continue
             if _looks_like_table_row(text):
                 lines = [text]
                 j = i + 1
@@ -438,6 +534,9 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
                     if leading_text:
                         p = doc.add_paragraph(leading_text)
                         _apply_body_style(p, opts)
+                        if _apply_pending_comment(doc, p, pending_comment):
+                            pending_comment = None
+                        last_paragraph = p
                     _add_table_from_cell_texts(doc, cell_texts, opts)
                     skip_until = j - 1
                     continue
@@ -447,6 +546,9 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
             else:
                 p = doc.add_paragraph()
             _apply_body_style(p, opts)
+            if _apply_pending_comment(doc, p, pending_comment):
+                pending_comment = None
+            last_paragraph = p
         elif elem.name in ("ul", "ol"):
             list_style = "List Bullet" if elem.name == "ul" else "List Number"
             for li in elem.find_all("li", recursive=False):
@@ -457,11 +559,17 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
                 else:
                     p = doc.add_paragraph(style=list_style)
                 _apply_body_style(p, opts)
+                if _apply_pending_comment(doc, p, pending_comment):
+                    pending_comment = None
+                last_paragraph = p
         elif elem.name == "table":
             _add_table_from_soup(doc, elem, opts)
         elif elem.name == "hr":
             p = doc.add_paragraph()
             _apply_body_style(p, opts)
+            if _apply_pending_comment(doc, p, pending_comment):
+                pending_comment = None
+            last_paragraph = p
         elif elem.name == "pre":
             pre_text = elem.get_text()
             parsed = _parse_raw_markdown_table(pre_text)
@@ -470,10 +578,16 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
                 if leading_text:
                     p = doc.add_paragraph(leading_text)
                     _apply_body_style(p, opts)
+                    if _apply_pending_comment(doc, p, pending_comment):
+                        pending_comment = None
+                    last_paragraph = p
                 _add_table_from_cell_texts(doc, cell_texts, opts)
             else:
                 p = doc.add_paragraph(pre_text)
                 _apply_body_style(p, opts)
+                if _apply_pending_comment(doc, p, pending_comment):
+                    pending_comment = None
+                last_paragraph = p
         elif elem.name == "div":
             div_children = [c for c in elem.children if hasattr(c, "name") and c.name]
             div_skip_until = -1
@@ -484,8 +598,18 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
                     level = int(sub.name[1])
                     p = doc.add_heading(sub.get_text(strip=True), level=level)
                     _apply_heading_style(p, level, opts)
+                    if _apply_pending_comment(doc, p, pending_comment):
+                        pending_comment = None
+                    last_paragraph = p
                 elif sub.name == "p":
                     text = sub.get_text(strip=True)
+                    comment_text = _extract_scoring_comment(text)
+                    if comment_text is not None:
+                        if last_paragraph and list(getattr(last_paragraph, "runs", [])):
+                            doc.add_comment(last_paragraph.runs, text=comment_text, author="评分说明", initials="")
+                        else:
+                            pending_comment = comment_text
+                        continue
                     if _looks_like_table_row(text):
                         lines = [text]
                         k = idx + 1
@@ -508,6 +632,9 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
                             if leading_text:
                                 p = doc.add_paragraph(leading_text)
                                 _apply_body_style(p, opts)
+                                if _apply_pending_comment(doc, p, pending_comment):
+                                    pending_comment = None
+                                last_paragraph = p
                             _add_table_from_cell_texts(doc, cell_texts, opts)
                             div_skip_until = k - 1
                             continue
@@ -517,11 +644,17 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
                     else:
                         p = doc.add_paragraph()
                     _apply_body_style(p, opts)
+                    if _apply_pending_comment(doc, p, pending_comment):
+                        pending_comment = None
+                    last_paragraph = p
                 elif sub.name in ("ul", "ol"):
                     list_style = "List Bullet" if sub.name == "ul" else "List Number"
                     for li in sub.find_all("li", recursive=False):
                         p = doc.add_paragraph(li.get_text(strip=True), style=list_style)
                         _apply_body_style(p, opts)
+                        if _apply_pending_comment(doc, p, pending_comment):
+                            pending_comment = None
+                        last_paragraph = p
                 elif sub.name == "table":
                     _add_table_from_soup(doc, sub, opts)
                 elif sub.name == "pre":
@@ -532,9 +665,15 @@ def markdown_to_docx(markdown_text: str, format_options: dict | None = None) -> 
                         if leading_text:
                             p = doc.add_paragraph(leading_text)
                             _apply_body_style(p, opts)
+                            if _apply_pending_comment(doc, p, pending_comment):
+                                pending_comment = None
+                            last_paragraph = p
                         _add_table_from_cell_texts(doc, cell_texts, opts)
                     else:
                         p = doc.add_paragraph(pre_text)
                         _apply_body_style(p, opts)
+                        if _apply_pending_comment(doc, p, pending_comment):
+                            pending_comment = None
+                        last_paragraph = p
 
     return doc

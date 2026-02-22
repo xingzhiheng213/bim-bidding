@@ -7,28 +7,18 @@ import {
   getSettingsExportFormatFonts,
   getSettingsKnowledgeBase,
   getSettingsLlm,
-  getSettingsModels,
   postSettingsExportFormat,
   postSettingsKnowledgeBase,
   postSettingsKnowledgeBaseTest,
   postSettingsLlm,
-  postSettingsModels,
 } from '../api/settings'
 import { designTokens } from '../theme/tokens'
 import '../App.css'
 
 const { Title, Text } = Typography
 
-const STEP_LABELS: Record<string, string> = {
-  analyze: '分析',
-  params: '参数提取',
-  framework: '框架生成',
-  chapters: '按章生成',
-}
-
 const PROVIDERS = [
   { key: 'deepseek', label: 'DeepSeek', defaultBaseUrl: 'https://api.deepseek.com' },
-  { key: 'zhipu', label: '智谱', defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
 ] as const
 
 const DEFAULT_EXPORT_FORMAT: ExportFormatConfig = {
@@ -64,16 +54,6 @@ function SettingsPage() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['settings', 'llm'],
     queryFn: getSettingsLlm,
-  })
-
-  const {
-    data: modelsData,
-    isLoading: modelsLoading,
-    isError: modelsError,
-    error: modelsErr,
-  } = useQuery({
-    queryKey: ['settings', 'models'],
-    queryFn: getSettingsModels,
   })
 
   const { data: exportFormatData, isLoading: exportFormatLoading } = useQuery({
@@ -119,23 +99,6 @@ function SettingsPage() {
       message.success('导出格式已保存')
       setExportFormat((prev) => ({ ...prev, ...res }))
       queryClient.invalidateQueries({ queryKey: ['settings', 'export-format'] })
-    },
-    onError: (e: unknown) => {
-      const detail =
-        e && typeof e === 'object' && 'response' in e && e.response && typeof e.response === 'object' && 'data' in e.response && e.response.data && typeof e.response.data === 'object' && 'detail' in e.response.data
-          ? String((e.response.data as { detail: unknown }).detail)
-          : e instanceof Error
-            ? e.message
-            : '保存失败'
-      message.error(detail)
-    },
-  })
-
-  const saveModelsMutation = useMutation({
-    mutationFn: postSettingsModels,
-    onSuccess: () => {
-      message.success('模型配置已保存')
-      queryClient.invalidateQueries({ queryKey: ['settings', 'models'] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -336,91 +299,6 @@ function SettingsPage() {
               </div>
             )
           })}
-      </Card>
-
-      <Card title="模型配置" style={{ marginBottom: designTokens.marginLG, width: '100%' }}>
-        <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
-          选择各步骤使用的大模型；未单独选择的步骤使用「默认模型」。模型名会对应到供应商（如 glm-4.7 → 智谱），请先在「大模型 API」中配置对应 API Key。
-        </Text>
-        {modelsLoading && <Spin size="small" style={{ marginBottom: designTokens.marginSM }} />}
-        {modelsError && (
-          <Text type="danger" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
-            {modelsErr instanceof Error ? modelsErr.message : String(modelsErr)}
-          </Text>
-        )}
-        {modelsData && (
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: designTokens.margin }}>
-              <div style={{ width: 100, minWidth: 100, flexShrink: 0 }}>
-                <Text strong>默认模型</Text>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: designTokens.marginXS, flex: 1 }}>
-                <Select
-                  style={{ width: 280 }}
-                  value={modelsData.default_model}
-                  onChange={(v) =>
-                    saveModelsMutation.mutate({
-                      default_model: v ?? undefined,
-                      analyze_model: modelsData.steps.analyze ?? null,
-                      params_model: modelsData.steps.params ?? null,
-                      framework_model: modelsData.steps.framework ?? null,
-                      chapters_model: modelsData.steps.chapters ?? null,
-                    })
-                  }
-                  loading={saveModelsMutation.isPending}
-                  options={modelsData.supported_models.map((m) => ({
-                    label: `${m.name} (${m.provider})`,
-                    value: m.id,
-                  }))}
-                />
-              </div>
-            </div>
-            {(['analyze', 'params', 'framework', 'chapters'] as const).map((stepKey) => {
-              const stepModel = modelsData.steps[stepKey]
-              const effective = stepModel || modelsData.default_model
-              const stepField = `${stepKey}_model` as const
-              return (
-                <div key={stepKey} style={{ display: 'flex', alignItems: 'center', marginBottom: designTokens.marginSM }}>
-                  <div style={{ width: 100, minWidth: 100, flexShrink: 0 }}>
-                    <Text>{STEP_LABELS[stepKey]}</Text>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: designTokens.marginXS, flex: 1 }}>
-                    <Select
-                      style={{ width: 280 }}
-                      value={stepModel ?? ''}
-                      placeholder="使用默认"
-                      allowClear
-                      onChange={(v) => {
-                        const payload = {
-                          default_model: modelsData.default_model,
-                          analyze_model: modelsData.steps.analyze ?? null,
-                          params_model: modelsData.steps.params ?? null,
-                          framework_model: modelsData.steps.framework ?? null,
-                          chapters_model: modelsData.steps.chapters ?? null,
-                        }
-                        payload[stepField] = v ?? null
-                        saveModelsMutation.mutate(payload)
-                      }}
-                      loading={saveModelsMutation.isPending}
-                      options={[
-                        { label: '使用默认', value: '' },
-                        ...modelsData.supported_models.map((m) => ({
-                          label: `${m.name} (${m.provider})`,
-                          value: m.id,
-                        })),
-                      ]}
-                    />
-                    {effective && (
-                      <Text type="secondary">
-                        当前：{effective}
-                      </Text>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
       </Card>
 
       <Card title="知识库" style={{ marginBottom: designTokens.marginLG, width: '100%' }}>
