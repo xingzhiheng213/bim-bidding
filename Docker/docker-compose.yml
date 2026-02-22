@@ -1,6 +1,6 @@
-# BIM 标书生成 — 一键运行（在项目根目录执行）
-# 用法：docker compose -f Docker/docker-compose.yml up -d --build
-# 首次使用：复制 Docker/.env.example 为 Docker/.env 并按需修改
+# BIM 标书生成 — 一键运行
+# 在 Docker 目录下执行：cd Docker && cp .env.example .env && docker compose up -d --build
+# 首次使用：编辑 .env 按需修改（如 POSTGRES_PASSWORD、VITE_API_BASE）
 
 services:
   redis:
