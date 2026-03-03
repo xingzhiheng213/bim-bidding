@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { DownloadOutlined, LoadingOutlined } from '@ant-design/icons'
+import { DownloadOutlined, InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons'
 import { Alert, Button, Card, Checkbox, Collapse, Input, message, Modal, Progress, Spin, Steps, Table, Tag, Typography } from 'antd'
 import type { StepStatus } from '../theme/stepStatus'
 import {
@@ -669,12 +669,23 @@ function TaskDetailPage() {
             )}
 
             {frameworkStep?.status === 'waiting_user' && (
-              <Alert
-                type="warning"
-                message="当前步骤：框架待确认 — 请确认框架或添加要点后继续。"
-                showIcon
-                style={{ marginBottom: designTokens.marginLG }}
-              />
+              <div
+                style={{
+                  marginBottom: designTokens.marginLG,
+                  padding: '10px 14px',
+                  background: designTokens.colorBgLayout,
+                  borderRadius: designTokens.borderRadius,
+                  borderLeft: `3px solid ${designTokens.colorPrimary}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
+                <InfoCircleOutlined style={{ color: designTokens.colorPrimary, fontSize: 16 }} />
+                <Text type="secondary" style={{ margin: 0 }}>
+                  当前步骤：框架待确认，请在下方案块中确认或调整后继续。
+                </Text>
+              </div>
             )}
 
             {TASK_STEP_ORDER.map((stepKey) => {
@@ -687,8 +698,8 @@ function TaskDetailPage() {
                 stepKey === 'framework' && status === 'waiting_user'
                   ? {
                       marginBottom: designTokens.marginLG,
-                      borderLeft: `4px solid ${designTokens.colorWarning}`,
-                      background: 'rgba(250, 173, 20, 0.06)',
+                      borderLeft: `3px solid ${designTokens.colorPrimary}`,
+                      background: designTokens.colorBgLayout,
                     }
                   : { marginBottom: designTokens.marginLG }
               return (
@@ -849,17 +860,32 @@ function TaskDetailPage() {
                         </Button>
                       )}
                       {frameworkStep?.status === 'waiting_user' && frameworkChapters.length > 0 && (
-                        <div style={{ marginBottom: designTokens.marginSM }}>
-                          <Alert
-                            type="warning"
-                            message="请确认框架或添加要点后继续。"
-                            showIcon
-                            style={{ marginBottom: designTokens.marginSM }}
-                          />
-                          <Button type="primary" style={{ marginRight: 8 }} loading={acceptFrameworkMutation.isPending} onClick={handleAcceptAndContinue}>接受并继续</Button>
-                          <Button style={{ marginRight: 8 }} loading={regenerateFrameworkMutation.isPending} onClick={handleRegenerateFramework}>重新生成框架</Button>
-                          <Button style={{ marginRight: 8 }} loading={savePointsMutation.isPending} onClick={handleOpenAddPoints}>添加要点</Button>
-                          <Button onClick={handleOpenFrameworkDiff}>查看框架对比</Button>
+                        <div style={{ marginBottom: designTokens.marginMD }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              padding: '10px 12px',
+                              background: 'rgba(0, 0, 0, 0.02)',
+                              borderRadius: designTokens.borderRadius,
+                              marginBottom: designTokens.marginSM,
+                            }}
+                          >
+                            <InfoCircleOutlined style={{ color: designTokens.colorTextTertiary, fontSize: 14 }} />
+                            <Text type="secondary" style={{ margin: 0, fontSize: 13 }}>
+                              请确认框架或添加要点后继续。
+                            </Text>
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                            <Button type="primary" loading={acceptFrameworkMutation.isPending} onClick={handleAcceptAndContinue}>
+                              接受并继续
+                            </Button>
+                            <span style={{ width: 1, height: 20, background: designTokens.colorBorderSecondary, margin: '0 4px' }} />
+                            <Button loading={regenerateFrameworkMutation.isPending} onClick={handleRegenerateFramework}>重新生成框架</Button>
+                            <Button loading={savePointsMutation.isPending} onClick={handleOpenAddPoints}>添加要点</Button>
+                            <Button onClick={handleOpenFrameworkDiff}>查看框架对比</Button>
+                          </div>
                         </div>
                       )}
                       {frameworkStep?.status === 'completed' && frameworkChapters.length > 0 && (
