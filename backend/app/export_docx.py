@@ -25,6 +25,8 @@ TOC_INDENT_PT_PER_LEVEL = 24
 # Word OOXML namespace for parse_xml
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
+_CN_PAREN_NUMBER_RE = re.compile(r"^\s*[（(]\s*\d+\s*[）)]")
+
 
 def _set_run_font_name(run, font_name: str) -> None:
     """Set run font name for both Latin (ascii/hAnsi) and East Asian (eastAsia) so 中文 uses the same font."""
@@ -41,9 +43,9 @@ def _set_run_font_name(run, font_name: str) -> None:
         rPr.insert(0, rFonts)
 
 
-def _add_inline_to_paragraph(p, elem) -> None:
-    """Add inline content (bold, italic, etc) from elem to paragraph p."""
-    for child in elem:
+def _add_inline_children_to_paragraph(p, children) -> None:
+    """Add inline content (bold, italic, code, br) from children into paragraph p."""
+    for child in children:
         if hasattr(child, "name") and child.name:
             if child.name in ("strong", "b"):
                 r = p.add_run(child.get_text())
@@ -61,6 +63,36 @@ def _add_inline_to_paragraph(p, elem) -> None:
             txt = str(child) if child else ""
             if txt:
                 p.add_run(txt)
+
+
+def _add_inline_to_paragraph(p, elem) -> None:
+    """Add inline content (bold, italic, etc) from elem to paragraph p."""
+    _add_inline_children_to_paragraph(p, list(elem))
+
+
+def _split_children_on_br(elem) -> list[list]:
+    """Split elem's direct children on <br/> tags (keeps formatting tags in each segment)."""
+    groups: list[list] = []
+    current: list = []
+    for child in elem:
+        if hasattr(child, "name") and child.name == "br":
+            groups.append(current)
+            current = []
+            continue
+        current.append(child)
+    groups.append(current)
+    return groups
+
+
+def _children_plain_text(children) -> str:
+    """Best-effort plain text of a list of BeautifulSoup children."""
+    parts: list[str] = []
+    for child in children:
+        if hasattr(child, "get_text"):
+            parts.append(child.get_text())
+        else:
+            parts.append(str(child) if child is not None else "")
+    return "".join(parts)
 
 
 def _apply_heading_style(paragraph, level: int, opts: dict) -> None:
@@ -512,6 +544,9 @@ def markdown_to_docx(
                 else:
                     pending_comment = comment_text
                 continue
+            if not text:
+                # Skip empty paragraphs to avoid extra blank lines in DOCX.
+                continue
             if _looks_like_table_row(text):
                 lines = [text]
                 j = i + 1
@@ -540,11 +575,25 @@ def markdown_to_docx(
                     _add_table_from_cell_texts(doc, cell_texts, opts)
                     skip_until = j - 1
                     continue
-            if text:
-                p = doc.add_paragraph()
-                _add_inline_to_paragraph(p, elem)
-            else:
-                p = doc.add_paragraph()
+            # If a paragraph starts with "（1）/（2）..." and contains <br>, split it into multiple
+            # paragraphs so each line gets the normal first-line indent (Word line breaks do not).
+            has_br = bool(getattr(elem, "find", None) and elem.find("br"))
+            if has_br:
+                groups = _split_children_on_br(elem)
+                first_line = _children_plain_text(groups[0]).strip() if groups else ""
+                if _CN_PAREN_NUMBER_RE.match(first_line):
+                    for group in groups:
+                        if not _children_plain_text(group).strip():
+                            continue
+                        p = doc.add_paragraph()
+                        _add_inline_children_to_paragraph(p, group)
+                        _apply_body_style(p, opts)
+                        if _apply_pending_comment(doc, p, pending_comment):
+                            pending_comment = None
+                        last_paragraph = p
+                    continue
+            p = doc.add_paragraph()
+            _add_inline_to_paragraph(p, elem)
             _apply_body_style(p, opts)
             if _apply_pending_comment(doc, p, pending_comment):
                 pending_comment = None
@@ -610,6 +659,9 @@ def markdown_to_docx(
                         else:
                             pending_comment = comment_text
                         continue
+                    if not text:
+                        # Skip empty paragraphs to avoid extra blank lines in DOCX.
+                        continue
                     if _looks_like_table_row(text):
                         lines = [text]
                         k = idx + 1
@@ -638,11 +690,23 @@ def markdown_to_docx(
                             _add_table_from_cell_texts(doc, cell_texts, opts)
                             div_skip_until = k - 1
                             continue
-                    if text:
-                        p = doc.add_paragraph()
-                        _add_inline_to_paragraph(p, sub)
-                    else:
-                        p = doc.add_paragraph()
+                    has_br = bool(getattr(sub, "find", None) and sub.find("br"))
+                    if has_br:
+                        groups = _split_children_on_br(sub)
+                        first_line = _children_plain_text(groups[0]).strip() if groups else ""
+                        if _CN_PAREN_NUMBER_RE.match(first_line):
+                            for group in groups:
+                                if not _children_plain_text(group).strip():
+                                    continue
+                                p = doc.add_paragraph()
+                                _add_inline_children_to_paragraph(p, group)
+                                _apply_body_style(p, opts)
+                                if _apply_pending_comment(doc, p, pending_comment):
+                                    pending_comment = None
+                                last_paragraph = p
+                            continue
+                    p = doc.add_paragraph()
+                    _add_inline_to_paragraph(p, sub)
                     _apply_body_style(p, opts)
                     if _apply_pending_comment(doc, p, pending_comment):
                         pending_comment = None
