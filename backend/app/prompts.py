@@ -596,7 +596,6 @@ def build_chapter_content_messages(
     chapter_full_name: str,
     outline_text: str,
     context_text: str,
-    analyze_text: str,
     bim_requirements: list[str],
     project_info: dict,
     risk_points: list[str] | None = None,
@@ -616,10 +615,6 @@ def build_chapter_content_messages(
 **小节大纲：**
 
 {outline_text.strip()}
-
-**招标要求参考：**
-
-{analyze_text.strip()[:config.CHAPTER_CONTENT_ANALYZE_MAX_LEN]}
 
 **BIM技术要求：**
 

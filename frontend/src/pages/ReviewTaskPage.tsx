@@ -157,7 +157,7 @@ function ReviewTaskPage() {
           ? String((e.response.data as { detail: unknown }).detail)
           : e instanceof Error
             ? e.message
-            : '一键重生成失败'
+            : '一键修正失败'
       message.error(detail)
     },
   })
@@ -395,7 +395,7 @@ function ReviewTaskPage() {
         <Alert
           type="success"
           message="审查已完成"
-          description="下方按章展示校审意见，可勾选采纳项后点击「接受并重生成」触发该章重写；或使用「一键按校审意见重生成全部章节」顺序重写全部。"
+          description="下方按章展示校审意见，可勾选采纳项后点击「接受并重生成」触发该章重写；或使用「一键修正」顺序重写全部。"
           style={{ marginBottom: designTokens.marginLG }}
           showIcon
         />
@@ -408,7 +408,7 @@ function ReviewTaskPage() {
             loading={regenerateAllMutation.isPending}
             onClick={() => taskId && regenerateAllMutation.mutate(taskId)}
           >
-            一键按校审意见重生成全部章节
+            一键修正
           </Button>
         </div>
       )}

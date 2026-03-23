@@ -27,7 +27,7 @@ CHAPTER_OUTLINE_TEMPERATURE = 0.2
 CHAPTER_CONTENT_TEMPERATURE = 0.3
 CHAPTER_REGENERATE_TEMPERATURE = 0.2
 ERROR_MESSAGE_MAX_LEN = 2000
-KB_TOP_K = 8
+KB_TOP_K = 4
 
 
 def _get_or_create_chapters_step(db: Session, task_id: int) -> TaskStep:
@@ -153,7 +153,6 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
             chapter_full_name=full_name,
             outline_text=outline_content,
             context_text=context_text,
-            analyze_text=analyze_text,
             bim_requirements=bim_requirements,
             project_info=project_info,
             risk_points=risk_points,
@@ -335,7 +334,6 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
                     chapter_full_name=full_name,
                     outline_text=outline_content,
                     context_text=context_text,
-                    analyze_text=analyze_text,
                     bim_requirements=bim_requirements,
                     project_info=project_info,
                     risk_points=risk_points,
@@ -446,7 +444,9 @@ def regenerate_all_chapters_from_review(task_id: int) -> None:
             .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")
             .first()
         )
-        if not chapters_step or chapters_step.status != "completed" or not chapters_step.output_snapshot:
+        # Note: one-click regenerate sets chapters_step.status="running" before enqueueing this task.
+        # We only require an existing chapters output snapshot to regenerate from.
+        if not chapters_step or not chapters_step.output_snapshot:
             _set_chapters_failed(db, task_id, "请先完成按章生成")
             return
 

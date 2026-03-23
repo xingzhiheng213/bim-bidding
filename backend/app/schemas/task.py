@@ -74,9 +74,17 @@ class TaskDetailResponse(BaseModel):
     steps: list[TaskStepSchema]
 
 
+class TaskCompareSummary(BaseModel):
+    """Summary flags for compare capability on a task."""
+
+    has_framework: bool
+    chapter_count: int
+
+
 class TaskSummary(BaseModel):
     """Brief task for GET /api/tasks list."""
     id: int
     name: str | None = None
     status: str
     created_at: datetime
+    compare_summary: TaskCompareSummary | None = None

@@ -30,3 +30,25 @@ class DiffResponse(BaseModel):
     original: str
     modified: str
     diff: list[DiffItem]
+
+
+class FrameworkCompareMeta(BaseModel):
+    """Metadata for framework diff availability."""
+
+    has_diff: bool
+
+
+class ChapterCompareMetaItem(BaseModel):
+    """One chapter entry in compare meta."""
+
+    number: int
+    has_diff: bool
+    label: str
+
+
+class CompareMetaResponse(BaseModel):
+    """Task-level compare metadata: which items have before/after versions."""
+
+    has_any: bool
+    framework: FrameworkCompareMeta
+    chapters: list[ChapterCompareMetaItem]

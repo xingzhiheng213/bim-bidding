@@ -29,11 +29,17 @@ export interface CreateTaskResponse {
   created_at: string
 }
 
+export interface TaskCompareSummary {
+  has_framework: boolean
+  chapter_count: number
+}
+
 export interface TaskSummary {
   id: number
   name: string | null
   status: string
   created_at: string
+  compare_summary?: TaskCompareSummary | null
 }
 
 export async function createTask(args?: { initialSteps?: string[]; name?: string }): Promise<CreateTaskResponse> {

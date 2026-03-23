@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { DownloadOutlined, InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons'
-import { Alert, Button, Card, Checkbox, Collapse, Input, message, Modal, Progress, Spin, Steps, Table, Tag, Typography } from 'antd'
+import { Alert, Button, Card, Checkbox, Collapse, Input, message, Modal, Progress, Spin, Steps, Tag, Typography } from 'antd'
 import type { StepStatus } from '../theme/stepStatus'
 import {
   getStepsStatus,
@@ -12,7 +12,6 @@ import {
   STEP_TITLES,
 } from '../theme/stepStatus'
 import { designTokens } from '../theme/tokens'
-import type { ColumnsType } from 'antd/es/table'
 import {
   getFrameworkDiff,
   getChaptersDiff,
@@ -41,6 +40,15 @@ const { Title, Text } = Typography
 
 const PREVIEW_LEN = 400
 const ANALYZE_PREVIEW_LEN = 500
+
+/** 参数提取-项目信息字段英文 key 对应的中文显示名（仅用于展示，逻辑仍用英文 key） */
+const PROJECT_INFO_LABELS: Record<string, string> = {
+  name: '名称',
+  scale: '规模',
+  location: '建设地点',
+  nature: '项目性质',
+  construction_unit: '建设单位',
+}
 
 /** 校审维度说明（任务页展示「审什么」；后续可扩展为从配置/接口读取并合并自定义项） */
 const REVIEW_DIMENSIONS: { key: string; label: string; desc: string; tagColor: 'error' | 'warning' | 'default' | 'processing' }[] = [
@@ -218,17 +226,6 @@ function TaskDetailPage() {
       chaptersPoints = {}
     }
   }
-
-  const stepColumns: ColumnsType<TaskStep> = [
-    { title: '步骤', dataIndex: 'step_key', key: 'step_key' },
-    { title: '状态', dataIndex: 'status', key: 'status' },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      render: (t: string) => new Date(t).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
-    },
-  ]
 
   const stepsItems =
     data?.steps != null
@@ -828,7 +825,7 @@ function TaskDetailPage() {
                           defaultActiveKey={[]}
                           style={{ marginTop: designTokens.marginSM }}
                           items={[
-                            { key: 'project_info', label: '项目信息', children: <Typography.Paragraph style={{ marginBottom: 0 }}>{Object.keys(paramsOutput.project_info || {}).length === 0 ? '（无）' : Object.entries(paramsOutput.project_info || {}).map(([k, v]) => <span key={k} style={{ display: 'block', marginBottom: 4 }}><Text strong>{k}：</Text>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>)}</Typography.Paragraph> },
+                            { key: 'project_info', label: '项目信息', children: <Typography.Paragraph style={{ marginBottom: 0 }}>{Object.keys(paramsOutput.project_info || {}).length === 0 ? '（无）' : Object.entries(paramsOutput.project_info || {}).map(([k, v]) => <span key={k} style={{ display: 'block', marginBottom: 4 }}><Text strong>{PROJECT_INFO_LABELS[k] ?? k}：</Text>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>)}</Typography.Paragraph> },
                             { key: 'bim_requirements', label: 'BIM 要求', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{(paramsOutput.bim_requirements || []).length === 0 ? '（无）' : (paramsOutput.bim_requirements || []).map((item, i) => <li key={i}>{item}</li>)}</ul> },
                             { key: 'risk_points', label: '风险点', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{(paramsOutput.risk_points || []).length === 0 ? '（无）' : (paramsOutput.risk_points || []).map((item, i) => <li key={i}>{item}</li>)}</ul> },
                           ]}
@@ -1068,17 +1065,6 @@ function TaskDetailPage() {
                 </Card>
               )
             })}
-
-            <Title level={4} style={{ marginTop: 24 }}>
-              步骤列表
-            </Title>
-            <Table
-              rowKey="id"
-              columns={stepColumns}
-              dataSource={data.steps}
-              pagination={false}
-              size="small"
-            />
           </>
         )}
       <Modal

@@ -16,7 +16,7 @@ from app.diff_compare import compute_diff
 from app.export_docx import markdown_to_docx
 from app.models import Task, TaskStep
 from app.settings_store import get_export_format_config
-from app.schemas.compare import DiffResponse
+from app.schemas.compare import CompareMetaResponse, DiffResponse, FrameworkCompareMeta, ChapterCompareMetaItem
 from app.schemas.task import (
     AcceptFrameworkRequest,
     AcceptReviewRequest,
@@ -26,6 +26,7 @@ from app.schemas.task import (
     RegenerateChapterRequest,
     RunChaptersRequest,
     SaveChapterPointsRequest,
+    TaskCompareSummary,
     TaskDetailResponse,
     TaskStepSchema,
     TaskSummary,
@@ -42,6 +43,68 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 ALLOWED_EXTENSIONS = (".pdf", ".doc", ".docx")
 
+
+def _compute_compare_meta_for_task(db: Session, task_id: int) -> dict:
+    """Internal helper: compute simple compare meta info for a task.
+
+    Returns dict with:
+    - has_any: bool
+    - framework_has_diff: bool
+    - chapter_numbers: list[int]  # chapters that have before/after snapshots
+    """
+    framework_has_diff = False
+    chapter_numbers: list[int] = []
+
+    # Framework: has diff when we have a before_regenerate snapshot
+    framework_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "framework")
+        .first()
+    )
+    if framework_step and framework_step.output_snapshot_before_regenerate:
+        framework_has_diff = True
+
+    # Chapters: diff available when both before_regenerate and chapters outputs exist
+    chapters_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")
+        .first()
+    )
+    before_keys: set[int] = set()
+    after_keys: set[int] = set()
+    if chapters_step:
+        if chapters_step.output_snapshot_before_regenerate:
+            try:
+                before = json.loads(chapters_step.output_snapshot_before_regenerate)
+                if isinstance(before, dict):
+                    for k in before.keys():
+                        try:
+                            before_keys.add(int(k))
+                        except (TypeError, ValueError):
+                            continue
+            except (json.JSONDecodeError, TypeError):
+                pass
+        if chapters_step.output_snapshot:
+            try:
+                out = json.loads(chapters_step.output_snapshot)
+                chapters_map = out.get("chapters") or {}
+                if isinstance(chapters_map, dict):
+                    for k in chapters_map.keys():
+                        try:
+                            after_keys.add(int(k))
+                        except (TypeError, ValueError):
+                            continue
+            except (json.JSONDecodeError, TypeError):
+                pass
+    if before_keys and after_keys:
+        chapter_numbers = sorted(before_keys & after_keys)
+
+    has_any = framework_has_diff or len(chapter_numbers) > 0
+    return {
+        "has_any": has_any,
+        "framework_has_diff": framework_has_diff,
+        "chapter_numbers": chapter_numbers,
+    }
 
 @router.post("", response_model=CreateTaskResponse, status_code=201)
 def create_task(
@@ -84,6 +147,27 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
         created_at=task.created_at,
         updated_at=task.updated_at,
         steps=[TaskStepSchema.model_validate(s) for s in steps],
+    )
+
+
+@router.get("/{task_id}/compare-meta", response_model=CompareMetaResponse)
+def get_task_compare_meta(task_id: int, db: Session = Depends(get_db)):
+    """Return compare metadata for a task: which items have before/after versions."""
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    meta = _compute_compare_meta_for_task(db, task_id)
+    framework = FrameworkCompareMeta(has_diff=meta["framework_has_diff"])
+    chapters_items: list[ChapterCompareMetaItem] = []
+    for num in meta["chapter_numbers"]:
+        chapters_items.append(
+            ChapterCompareMetaItem(number=num, has_diff=True, label=f"第 {num} 章")
+        )
+    return CompareMetaResponse(
+        has_any=meta["has_any"],
+        framework=framework,
+        chapters=chapters_items,
     )
 
 
@@ -913,4 +997,22 @@ def download_docx(task_id: int, db: Session = Depends(get_db)):
 def list_tasks(db: Session = Depends(get_db)):
     """List tasks (newest first)."""
     tasks = db.query(Task).order_by(Task.created_at.desc()).all()
-    return [TaskSummary(id=t.id, name=t.name, status=t.status, created_at=t.created_at) for t in tasks]
+    summaries: list[TaskSummary] = []
+    for t in tasks:
+        meta = _compute_compare_meta_for_task(db, t.id)
+        compare_summary: TaskCompareSummary | None = None
+        if meta["has_any"]:
+            compare_summary = TaskCompareSummary(
+                has_framework=meta["framework_has_diff"],
+                chapter_count=len(meta["chapter_numbers"]),
+            )
+        summaries.append(
+            TaskSummary(
+                id=t.id,
+                name=t.name,
+                status=t.status,
+                created_at=t.created_at,
+                compare_summary=compare_summary,
+            )
+        )
+    return summaries

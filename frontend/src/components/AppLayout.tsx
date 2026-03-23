@@ -15,7 +15,7 @@ const SIDER_WIDTH = 220
 const mainNavItems = [
   { key: '/one-click', label: '一键生成' },
   { key: '/', label: '高级生成' },
-  { key: '/compare', label: '对比' },
+  { key: '/compare', label: '修正对比' },
   { key: '/review', label: '标书校审' },
 ]
 const bottomNavItems = [{ key: '/settings', label: '设置' }]

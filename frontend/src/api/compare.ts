@@ -15,6 +15,22 @@ export interface DiffResponse {
   diff: DiffItem[]
 }
 
+export interface CompareMetaFramework {
+  has_diff: boolean
+}
+
+export interface CompareMetaChapterItem {
+  number: number
+  has_diff: boolean
+  label: string
+}
+
+export interface CompareMetaResponse {
+  has_any: boolean
+  framework: CompareMetaFramework
+  chapters: CompareMetaChapterItem[]
+}
+
 export async function postCompare(
   original: string,
   modified: string,
@@ -41,5 +57,10 @@ export async function getChaptersDiff(
     `/api/tasks/${taskId}/steps/chapters/diff`,
     { params: { chapter_number: chapterNumber } },
   )
+  return data
+}
+
+export async function getTaskCompareMeta(taskId: string): Promise<CompareMetaResponse> {
+  const { data } = await api.get<CompareMetaResponse>(`/api/tasks/${taskId}/compare-meta`)
   return data
 }

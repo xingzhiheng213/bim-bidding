@@ -6,6 +6,7 @@ import OneClickTaskDetailPage from './pages/OneClickTaskDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import TaskDetailPage from './pages/TaskDetailPage'
 import ComparePage from './pages/ComparePage'
+import CompareTaskDetailPage from './pages/CompareTaskDetailPage'
 import ReviewPage from './pages/ReviewPage'
 import ReviewTaskPage from './pages/ReviewTaskPage'
 
@@ -18,6 +19,7 @@ function App() {
         <Route path="one-click/tasks/:id" element={<OneClickTaskDetailPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="compare" element={<ComparePage />} />
+        <Route path="compare/tasks/:id" element={<CompareTaskDetailPage />} />
         <Route path="review" element={<ReviewPage />} />
         <Route path="review/:taskId" element={<ReviewTaskPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
