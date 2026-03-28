@@ -8,7 +8,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import LlmSetting, PlatformLlmConfig, ExportFormatSetting, KbSetting
+from app.models import LlmSetting, ExportFormatSetting, KbSetting
 
 logger = logging.getLogger(__name__)
 
@@ -300,7 +300,7 @@ def set_export_format_config(
 
 # --- Knowledge base settings (single row: kb_type + RAGFlow config) ---
 
-VALID_KB_TYPES = ("none", "thinkdoc", "ragflow")
+VALID_KB_TYPES = ("none", "ragflow")
 
 
 def _kb_config_from_env() -> dict:
@@ -409,64 +409,3 @@ def get_ragflow_effective() -> tuple[str, str, list[str]] | None:
         )
     return None
 
-
-# --- Platform model config (default + per-step) ---
-
-STEP_KEYS = ("analyze", "params", "framework", "chapters", "review")
-
-
-def get_model_config() -> dict:
-    """Return { default_model, analyze_model, params_model, framework_model, chapters_model } from DB."""
-    db: Session = SessionLocal()
-    try:
-        row = db.query(PlatformLlmConfig).first()
-        if not row:
-            return {
-                "default_model": "deepseek-chat",
-                "analyze_model": None,
-                "params_model": None,
-                "framework_model": None,
-                "chapters_model": None,
-            }
-        return {
-            "default_model": row.default_model or "deepseek-chat",
-            "analyze_model": row.analyze_model,
-            "params_model": row.params_model,
-            "framework_model": row.framework_model,
-            "chapters_model": row.chapters_model,
-        }
-    finally:
-        db.close()
-
-
-def set_model_config(
-    default_model: str | None = None,
-    analyze_model: str | None = None,
-    params_model: str | None = None,
-    framework_model: str | None = None,
-    chapters_model: str | None = None,
-) -> None:
-    """Update platform model config (single row; create if not exist)."""
-    db: Session = SessionLocal()
-    try:
-        row = db.query(PlatformLlmConfig).first()
-        if not row:
-            row = PlatformLlmConfig(
-                default_model=default_model or "deepseek-chat",
-                analyze_model=analyze_model,
-                params_model=params_model,
-                framework_model=framework_model,
-                chapters_model=chapters_model,
-            )
-            db.add(row)
-        else:
-            if default_model is not None:
-                row.default_model = default_model.strip() or "deepseek-chat"
-            # Step fields: None or empty = clear (use default)
-            row.analyze_model = (analyze_model and analyze_model.strip()) or None
-            row.params_model = (params_model and params_model.strip()) or None
-            row.framework_model = (framework_model and framework_model.strip()) or None
-            row.chapters_model = (chapters_model and chapters_model.strip()) or None
-        db.commit()
-    finally:
-        db.close()

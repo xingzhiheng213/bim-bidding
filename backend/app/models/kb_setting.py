@@ -1,4 +1,4 @@
-"""Knowledge base settings: kb_type (none/thinkdoc/ragflow) and RAGFlow config (single row)."""
+"""Knowledge base settings: kb_type (none/ragflow) and RAGFlow config (single row)."""
 from datetime import datetime
 
 from sqlalchemy import DateTime, Integer, String, Text

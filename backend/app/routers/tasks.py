@@ -1,6 +1,7 @@
 """Task CRUD and list API."""
 import io
 import json
+import shutil
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -44,32 +45,21 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 ALLOWED_EXTENSIONS = (".pdf", ".doc", ".docx")
 
 
-def _compute_compare_meta_for_task(db: Session, task_id: int) -> dict:
-    """Internal helper: compute simple compare meta info for a task.
+def _compute_compare_meta_from_steps(
+    framework_step: TaskStep | None,
+    chapters_step: TaskStep | None,
+) -> dict:
+    """Pure helper: compute compare meta from already-fetched step objects (no DB I/O).
 
     Returns dict with:
     - has_any: bool
     - framework_has_diff: bool
     - chapter_numbers: list[int]  # chapters that have before/after snapshots
     """
-    framework_has_diff = False
-    chapter_numbers: list[int] = []
-
-    # Framework: has diff when we have a before_regenerate snapshot
-    framework_step = (
-        db.query(TaskStep)
-        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "framework")
-        .first()
+    framework_has_diff = bool(
+        framework_step and framework_step.output_snapshot_before_regenerate
     )
-    if framework_step and framework_step.output_snapshot_before_regenerate:
-        framework_has_diff = True
 
-    # Chapters: diff available when both before_regenerate and chapters outputs exist
-    chapters_step = (
-        db.query(TaskStep)
-        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")
-        .first()
-    )
     before_keys: set[int] = set()
     after_keys: set[int] = set()
     if chapters_step:
@@ -96,15 +86,29 @@ def _compute_compare_meta_for_task(db: Session, task_id: int) -> dict:
                             continue
             except (json.JSONDecodeError, TypeError):
                 pass
-    if before_keys and after_keys:
-        chapter_numbers = sorted(before_keys & after_keys)
 
+    chapter_numbers = sorted(before_keys & after_keys) if (before_keys and after_keys) else []
     has_any = framework_has_diff or len(chapter_numbers) > 0
     return {
         "has_any": has_any,
         "framework_has_diff": framework_has_diff,
         "chapter_numbers": chapter_numbers,
     }
+
+
+def _compute_compare_meta_for_task(db: Session, task_id: int) -> dict:
+    """DB helper: fetch framework/chapters steps for one task then delegate to pure helper."""
+    framework_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "framework")
+        .first()
+    )
+    chapters_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")
+        .first()
+    )
+    return _compute_compare_meta_from_steps(framework_step, chapters_step)
 
 @router.post("", response_model=CreateTaskResponse, status_code=201)
 def create_task(
@@ -173,13 +177,20 @@ def get_task_compare_meta(task_id: int, db: Session = Depends(get_db)):
 
 @router.delete("/{task_id}", status_code=204)
 def delete_task(task_id: int, db: Session = Depends(get_db)):
-    """Delete a task and its steps. Returns 204 No Content."""
+    """Delete a task and its steps. Returns 204 No Content.
+
+    DB records are removed first; uploaded files are cleaned up after a
+    successful commit so that a failed commit never leaves orphaned DB rows.
+    """
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     db.query(TaskStep).filter(TaskStep.task_id == task_id).delete()
     db.delete(task)
     db.commit()
+    # Clean up uploaded files after successful DB commit
+    task_dir = config.UPLOAD_DIR / f"task_{task_id}"
+    shutil.rmtree(task_dir, ignore_errors=True)
     return None
 
 
@@ -995,11 +1006,39 @@ def download_docx(task_id: int, db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[TaskSummary])
 def list_tasks(db: Session = Depends(get_db)):
-    """List tasks (newest first)."""
+    """List tasks (newest first).
+
+    Uses 3 queries total regardless of task count (vs. the previous 1+2N pattern):
+      1. SELECT all tasks
+      2. SELECT framework steps WHERE task_id IN (...)
+      3. SELECT chapters steps WHERE task_id IN (...)
+    """
     tasks = db.query(Task).order_by(Task.created_at.desc()).all()
+    if not tasks:
+        return []
+
+    task_ids = [t.id for t in tasks]
+
+    framework_steps = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id.in_(task_ids), TaskStep.step_key == "framework")
+        .all()
+    )
+    chapters_steps = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id.in_(task_ids), TaskStep.step_key == "chapters")
+        .all()
+    )
+
+    framework_by_task: dict[int, TaskStep] = {s.task_id: s for s in framework_steps}
+    chapters_by_task: dict[int, TaskStep] = {s.task_id: s for s in chapters_steps}
+
     summaries: list[TaskSummary] = []
     for t in tasks:
-        meta = _compute_compare_meta_for_task(db, t.id)
+        meta = _compute_compare_meta_from_steps(
+            framework_by_task.get(t.id),
+            chapters_by_task.get(t.id),
+        )
         compare_summary: TaskCompareSummary | None = None
         if meta["has_any"]:
             compare_summary = TaskCompareSummary(

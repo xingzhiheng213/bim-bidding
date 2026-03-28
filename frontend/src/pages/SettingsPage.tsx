@@ -46,7 +46,7 @@ function SettingsPage() {
   const [inputByProvider, setInputByProvider] = useState<Record<string, string>>({})
   const [baseUrlByProvider, setBaseUrlByProvider] = useState<Record<string, string>>({})
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT)
-  const [kbType, setKbType] = useState<'none' | 'thinkdoc' | 'ragflow'>('none')
+  const [kbType, setKbType] = useState<'none' | 'ragflow'>('none')
   const [ragflowApiUrl, setRagflowApiUrl] = useState('')
   const [ragflowApiKey, setRagflowApiKey] = useState('')
   const [ragflowDatasetIds, setRagflowDatasetIds] = useState('')
@@ -78,7 +78,7 @@ function SettingsPage() {
 
   useEffect(() => {
     if (kbData) {
-      setKbType((kbData.kb_type as 'none' | 'thinkdoc' | 'ragflow') || 'none')
+      setKbType((kbData.kb_type as 'none' | 'ragflow') || 'none')
       setRagflowApiUrl(kbData.ragflow_api_url ?? '')
       setRagflowDatasetIds(kbData.ragflow_dataset_ids ?? '')
     }
@@ -320,16 +320,10 @@ function SettingsPage() {
                 onChange={(v) => setKbType(v ?? 'none')}
                 options={[
                   { label: '不使用', value: 'none' },
-                  { label: 'ThinkDoc', value: 'thinkdoc' },
                   { label: 'RAGFlow', value: 'ragflow' },
                 ]}
               />
             </div>
-            {kbType === 'thinkdoc' && (
-              <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
-                ThinkDoc 当前通过环境变量配置。
-              </Text>
-            )}
             {kbType === 'none' && (
               <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginSM }}>
                 未使用知识库检索。

@@ -1,7 +1,7 @@
 """Task and TaskStep models for BIM bidding workflow."""
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Integer
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, Integer
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -26,6 +26,9 @@ class Task(Base):
 
 class TaskStep(Base):
     __tablename__ = "task_steps"
+    __table_args__ = (
+        Index("ix_task_steps_task_id_step_key", "task_id", "step_key"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), nullable=False)

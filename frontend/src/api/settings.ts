@@ -96,7 +96,7 @@ export interface KnowledgeBaseConfig {
 }
 
 export interface PostKnowledgeBaseBody {
-  kb_type: 'none' | 'thinkdoc' | 'ragflow'
+  kb_type: 'none' | 'ragflow'
   ragflow_api_url?: string | null
   ragflow_api_key?: string | null
   ragflow_dataset_ids?: string | null

@@ -158,7 +158,7 @@ def post_settings_export_format(body: PostExportFormatBody):
 class PostKnowledgeBaseBody(BaseModel):
     """Knowledge base type and RAGFlow config; empty api_key = keep current."""
 
-    kb_type: Literal["none", "thinkdoc", "ragflow"] = Field(..., description="Knowledge base type")
+    kb_type: Literal["none", "ragflow"] = Field(..., description="Knowledge base type")
     ragflow_api_url: str | None = Field(None, description="RAGFlow base URL; omit to keep current")
     ragflow_api_key: str | None = Field(None, description="RAGFlow API key; omit or empty to keep current")
     ragflow_dataset_ids: str | None = Field(None, description="RAGFlow dataset IDs, comma-separated")

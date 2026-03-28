@@ -30,6 +30,22 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     """Test DB connection and create tables if not exist."""
+    # Security check: warn loudly if SETTINGS_SECRET_KEY is not set
+    if not os.getenv("SETTINGS_SECRET_KEY", "").strip():
+        logger.warning(
+            "\n"
+            "╔══════════════════════════════════════════════════════════════╗\n"
+            "║  ⚠  SECURITY WARNING: SETTINGS_SECRET_KEY is not set!       ║\n"
+            "║  API Keys stored in the database are encrypted with a        ║\n"
+            "║  publicly known placeholder key. Anyone with a DB dump can   ║\n"
+            "║  instantly decrypt your DeepSeek / RAGFlow API keys.         ║\n"
+            "║                                                               ║\n"
+            "║  Generate a key:                                              ║\n"
+            "║    python -c \"from cryptography.fernet import Fernet;        ║\n"
+            "║               print(Fernet.generate_key().decode())\"         ║\n"
+            "║  Then set SETTINGS_SECRET_KEY=<key> in your .env file.       ║\n"
+            "╚══════════════════════════════════════════════════════════════╝"
+        )
     try:
         check_db()
         logger.info("Database connection OK")
@@ -80,6 +96,18 @@ async def startup():
             logger.debug("Column celery_task_id already exists")
         else:
             logger.warning("Could not add celery_task_id: %s", e)
+
+    # Add composite index on (task_id, step_key) for task_steps — highest-frequency query path
+    try:
+        with engine.connect() as conn:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_task_steps_task_id_step_key"
+                " ON task_steps (task_id, step_key)"
+            ))
+            conn.commit()
+        logger.info("Index ix_task_steps_task_id_step_key ensured on task_steps")
+    except Exception as e:
+        logger.warning("Could not create index ix_task_steps_task_id_step_key: %s", e)
 
 
 @app.get("/health")

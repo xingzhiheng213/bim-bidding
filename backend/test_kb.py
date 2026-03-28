@@ -1,7 +1,6 @@
 """Test knowledge base retrieval. Run from backend/ with venv activated.
 
-Uses effective kb_type from 设置页/DB (then env): thinkdoc 或 ragflow.
-- ThinkDoc: 需配置 THINKDOC_API_KEY、THINKDOC_KB_IDS（或设置页）.
+Uses effective kb_type from 设置页/DB (then env): ragflow 或 none.
 - RAGFlow: 需在设置页配置 Base URL、API Key、Dataset IDs（或对应环境变量）.
 
 用法:
@@ -26,9 +25,8 @@ def main():
     print("Knowledge base type (from 设置页/DB):", kb_type)
 
     if kb_type == "none" or not kb_type:
-        print("当前未启用知识库。请在「设置」页选择知识库类型并配置：")
-        print("  - ThinkDoc：THINKDOC_API_KEY、THINKDOC_KB_IDS（或设置页）")
-        print("  - RAGFlow：Base URL、API Key、Dataset IDs（或设置页）")
+        print("当前未启用知识库。请在「设置」页选择 RAGFlow 并配置：")
+        print("  - RAGFlow：Base URL、API Key、Dataset IDs（或对应环境变量）")
         return
 
     query = (sys.argv[1] if len(sys.argv) > 1 else "BIM应用").strip() or "BIM应用"
@@ -53,7 +51,7 @@ def main():
             print("  - 设置页 RAGFlow Base URL、API Key、Dataset IDs 是否正确")
             print("  - 设置页「检测连通性」是否通过；知识库中是否有相关文档")
         else:
-            print("  - ThinkDoc / RAGFlow 配置与对应服务是否可用；知识库中是否有相关文档")
+            print("  - RAGFlow 配置与服务是否可用；知识库中是否有相关文档")
 
 
 if __name__ == "__main__":
