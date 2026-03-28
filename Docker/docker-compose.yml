@@ -1,12 +1,24 @@
 # BIM 标书生成 — 一键运行
 # 在 Docker 目录下执行：cd Docker && cp .env.example .env && docker compose up -d --build
 # 首次使用：编辑 .env 按需修改（如 POSTGRES_PASSWORD、VITE_API_BASE）
+# Redis：默认口令为 compose 内建长随机串（未设 REDIS_PASSWORD 时）。生产请在 .env 中覆盖 REDIS_PASSWORD。
 
 services:
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-X8vK2mN9pQwR4tY7uZ3hJ6fDcSbV1gH5kLmN7pQr}
+    # 不映射 6379 到宿主机，避免资产扫描暴露 Redis；backend/celery 仍通过服务名 redis 访问
+    # 若需本机 redis-cli 调试，取消下行注释：
+    # ports:
+    #   - "6379:6379"
+    command: >
+      sh -c 'exec redis-server --requirepass "$$REDIS_PASSWORD"'
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
+      interval: 5s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
   postgres:
@@ -32,7 +44,7 @@ services:
       dockerfile: Docker/Dockerfile.backend
     env_file: .env
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-X8vK2mN9pQwR4tY7uZ3hJ6fDcSbV1gH5kLmN7pQr}@redis:6379/0
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-bim_bidding}
       UPLOAD_DIR: /app/data/uploads
       EXPORT_DIR: /app/data/exports
@@ -46,7 +58,7 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
 
   celery:
@@ -56,7 +68,7 @@ services:
     command: celery -A celery_app worker -l info -P solo
     env_file: .env
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-X8vK2mN9pQwR4tY7uZ3hJ6fDcSbV1gH5kLmN7pQr}@redis:6379/0
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-bim_bidding}
       UPLOAD_DIR: /app/data/uploads
       EXPORT_DIR: /app/data/exports
@@ -67,7 +79,7 @@ services:
       backend:
         condition: service_started
       redis:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     restart: unless-stopped
