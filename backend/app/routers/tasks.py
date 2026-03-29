@@ -244,6 +244,22 @@ def upload_file(
     dest_path = task_dir / stored_name
     relative_stored_path = f"task_{task_id}/{stored_name}"
 
+    # Fetch existing upload step now so we can recover the old file path before overwriting
+    upload_step = (
+        db.query(TaskStep)
+        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "upload")
+        .first()
+    )
+    old_file_path: Path | None = None
+    if upload_step and upload_step.output_snapshot:
+        try:
+            old_output = json.loads(upload_step.output_snapshot)
+            old_rel = old_output.get("stored_path")
+            if old_rel:
+                old_file_path = config.UPLOAD_DIR / old_rel
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     size = 0
     chunk_size = 1024 * 1024
     try:
@@ -265,11 +281,6 @@ def upload_file(
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {e}") from e
 
-    upload_step = (
-        db.query(TaskStep)
-        .filter(TaskStep.task_id == task_id, TaskStep.step_key == "upload")
-        .first()
-    )
     if not upload_step:
         upload_step = TaskStep(task_id=task_id, step_key="upload", status="pending")
         db.add(upload_step)
@@ -283,6 +294,10 @@ def upload_file(
     upload_step.status = "completed"
     upload_step.error_message = None
     db.commit()
+
+    # Remove the previous upload only after a successful DB commit
+    if old_file_path and old_file_path != dest_path:
+        old_file_path.unlink(missing_ok=True)
 
     return {
         "step_key": "upload",

@@ -105,7 +105,7 @@ __table_args__ = (
 
 ---
 
-### P1-4 ⬜ 重复上传文件不清理旧文件
+### P1-4 ✅ 重复上传文件不清理旧文件
 
 **文件**：`backend/app/routers/tasks.py`，`upload_file()` 函数
 
@@ -116,6 +116,8 @@ __table_args__ = (
 **修复方案**：  
 上传新文件成功后，读取旧 `upload_step.output_snapshot` 中的 `stored_path`，
 删除旧文件（`old_path.unlink(missing_ok=True)`），再更新步骤记录。
+
+**处置**：已修复——在写新文件**之前**先查 upload_step 并解析旧 `stored_path` 存入 `old_file_path`；`db.commit()` 成功后，若 `old_file_path` 存在且与新文件不同，则 `old_file_path.unlink(missing_ok=True)` 清理旧文件。旧文件删除严格在 commit 之后，确保 DB 提交失败时磁盘状态不被破坏。
 
 ---
 
