@@ -716,7 +716,7 @@ function TaskDetailPage() {
                         <>
                           <input
                             type="file"
-                            accept=".pdf,.doc,.docx"
+                            accept=".pdf,.docx"
                             onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
                             style={{ marginRight: 8 }}
                           />

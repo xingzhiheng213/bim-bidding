@@ -34,13 +34,22 @@ _LAN_VITE_ORIGIN_REGEX = (
     r"172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}"
     r"):5173$"
 )
+# SEC-03: 显式 methods/headers，避免通配符与 credentials 组合过宽
+_CORS_ALLOW_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+_CORS_ALLOW_HEADERS = [
+    "Content-Type",
+    "Authorization",
+    "X-API-Key",
+    "Accept",
+    "Accept-Language",
+]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
     allow_origin_regex=_LAN_VITE_ORIGIN_REGEX if _cors_allow_lan_vite else None,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=_CORS_ALLOW_METHODS,
+    allow_headers=_CORS_ALLOW_HEADERS,
 )
 
 

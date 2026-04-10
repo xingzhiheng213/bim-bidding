@@ -10,6 +10,7 @@ import httpx
 
 from app import config
 from app.settings_store import get_kb_config, get_ragflow_effective
+from app.url_safety import validate_ragflow_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,9 @@ def test_ragflow_connection(base_url: str, api_key: str) -> tuple[bool, str]:
     """Test RAGFlow connectivity: GET /api/v1/datasets with page_size=1. Returns (success, message)."""
     if not (base_url and (base_url or "").strip()) or not (api_key and (api_key or "").strip()):
         return False, "请填写 Base URL 和 API Key"
+    ok, err = validate_ragflow_base_url(base_url.strip())
+    if not ok:
+        return False, err
     url = f"{base_url.rstrip('/')}/api/v1/datasets"
     params = {"page": 1, "page_size": 1}
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}

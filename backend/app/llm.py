@@ -67,4 +67,10 @@ def call_llm(
     try:
         return data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as e:
-        raise ValueError(f"Unexpected LLM response shape: {data}") from e
+        # SEC-06: 不在异常中附带完整响应体，避免泄露供应商结构或计费信息
+        hint = (
+            f"type={type(data).__name__}"
+            if not isinstance(data, dict)
+            else f"keys={list(data.keys())[:12]}"
+        )
+        raise ValueError(f"LLM 响应格式异常（{hint}），请检查 API 与模型配置") from e

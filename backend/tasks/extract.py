@@ -69,11 +69,23 @@ def run_extract(task_id: int) -> None:
             return
 
         stored_path = output.get("stored_path")
-        if not stored_path:
+        if not stored_path or not isinstance(stored_path, str):
             _set_extract_failed(db, task_id, "上传步骤缺少 stored_path")
             return
 
-        absolute_path: Path = config.UPLOAD_DIR / stored_path
+        # SEC-07: 规范化并限制在 UPLOAD_DIR 内，防止路径穿越
+        upload_root = config.UPLOAD_DIR.resolve()
+        try:
+            absolute_path = (upload_root / stored_path).resolve()
+        except (OSError, ValueError):
+            _set_extract_failed(db, task_id, "存储路径非法")
+            return
+        try:
+            absolute_path.relative_to(upload_root)
+        except ValueError:
+            _set_extract_failed(db, task_id, "存储路径非法（越界）")
+            return
+
         if not absolute_path.exists():
             _set_extract_failed(db, task_id, f"文件不存在: {stored_path}")
             return

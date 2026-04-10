@@ -1,6 +1,7 @@
 """Task CRUD and list API."""
 import io
 import json
+import logging
 import shutil
 import uuid
 from datetime import datetime
@@ -11,6 +12,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app import config
+from app.upload_sniff import bytes_match_upload_extension
 from app.assembler import assemble_full_markdown
 from app.database import get_db
 from app.diff_compare import compute_diff
@@ -40,9 +42,12 @@ from tasks.framework import run_framework
 from tasks.params import run_params
 from tasks.review import run_review, run_review_chapter
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
-ALLOWED_EXTENSIONS = (".pdf", ".doc", ".docx")
+# SEC-04: 与 parser 一致，不接受 .doc；上传后校验魔数
+ALLOWED_EXTENSIONS = (".pdf", ".docx")
 
 
 def _compute_compare_meta_from_steps(
@@ -208,15 +213,27 @@ def cancel_task(task_id: int, db: Session = Depends(get_db)):
     if not running:
         return {"message": "当前无正在执行的步骤", "revoked": False}
     celery_task_id = running.celery_task_id
+    revoke_error: str | None = None
     if celery_task_id:
         try:
             celery_app.control.revoke(celery_task_id, terminate=True)
-        except Exception:
-            pass
+        except Exception as e:
+            # SEC-09: 不再静默吞掉，便于审计与排障
+            logger.warning(
+                "cancel_task: revoke failed task_id=%s celery_task_id=%s: %s",
+                task_id,
+                celery_task_id,
+                e,
+                exc_info=True,
+            )
+            revoke_error = str(e)[:500]
     running.status = "pending"
     running.celery_task_id = None
     db.commit()
-    return {"message": "已取消当前步骤", "revoked": True, "step_key": running.step_key}
+    out: dict = {"message": "已取消当前步骤", "revoked": True, "step_key": running.step_key}
+    if revoke_error:
+        out["revoke_warning"] = "已向 Broker 发送撤销，但 revoke 调用报错，请查看服务端日志"
+    return out
 
 
 @router.post("/{task_id}/upload", status_code=201)
@@ -225,7 +242,7 @@ def upload_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
-    """Upload a file for the task; validate type (pdf/doc/docx) and size; store and update upload step."""
+    """Upload a file for the task; validate type (pdf/docx), magic bytes, size; store and update upload step."""
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -260,10 +277,22 @@ def upload_file(
         except (json.JSONDecodeError, TypeError):
             pass
 
+    head_max = 8192
+    head = file.file.read(head_max)
+    if len(head) < 4:
+        raise HTTPException(status_code=400, detail="文件过小或为空")
+    if not bytes_match_upload_extension(suffix, head):
+        raise HTTPException(
+            status_code=400,
+            detail="文件内容与扩展名不符（请上传真实 PDF 或 DOCX）",
+        )
+
     size = 0
     chunk_size = 1024 * 1024
     try:
         with open(dest_path, "wb") as f:
+            f.write(head)
+            size += len(head)
             while True:
                 chunk = file.file.read(chunk_size)
                 if not chunk:

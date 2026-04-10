@@ -547,7 +547,7 @@ export default function OneClickTaskDetailPage() {
           </div>
           <input
             type="file"
-            accept=".pdf,.doc,.docx"
+            accept=".pdf,.docx"
             onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)}
             style={{ marginBottom: designTokens.marginSM, display: 'block' }}
           />
