@@ -1,13 +1,15 @@
-"""Test document assembler (stage 4.2). Run from backend/ with venv activated.
+"""Test document assembler (stage 4.2).
 
-Tests project_info_to_markdown; optionally verifies assemble_full_markdown with a real task:
-  python test_assembler.py [task_id]
+自动化测试见 test_project_info_to_markdown；可选在 backend/ 下运行联调：
+
+  python tests/test_assembler.py [task_id]
 """
 import os
 import sys
 
-_backend = os.path.dirname(os.path.abspath(__file__))
-os.chdir(_backend)
+# tests/ 的父目录即 backend/，保证与仓库内其它模块一致
+_BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(_BACKEND_ROOT)
 
 from app.assembler import assemble_full_markdown, project_info_to_markdown
 from app.database import SessionLocal
@@ -53,7 +55,7 @@ def main():
             print(f"assemble_full_markdown: {e}")
             print("Ensure task has completed params, framework, and chapters steps.")
     else:
-        print("To verify assemble_full_markdown, run: python test_assembler.py <task_id>")
+        print("To verify assemble_full_markdown, run: python tests/test_assembler.py <task_id>")
 
 
 if __name__ == "__main__":

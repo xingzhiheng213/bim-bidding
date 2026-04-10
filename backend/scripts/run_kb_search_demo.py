@@ -1,19 +1,16 @@
-"""Test knowledge base retrieval. Run from backend/ with venv activated.
+"""知识库检索联调脚本（RAGFlow / none）。
 
-Uses effective kb_type from 设置页/DB (then env): ragflow 或 none.
-- RAGFlow: 需在设置页配置 Base URL、API Key、Dataset IDs（或对应环境变量）.
+在 backend/ 目录下：
 
-用法:
-  python test_kb.py              # 默认查询 "BIM应用"，top_k=5
-  python test_kb.py "BIM施工应用" # 指定查询词
-  python test_kb.py "BIM施工应用" 10  # 指定查询词和 top_k
+  python scripts/run_kb_search_demo.py
+  python scripts/run_kb_search_demo.py "BIM施工应用"
+  python scripts/run_kb_search_demo.py "BIM施工应用" 10
 """
 import os
 import sys
 
-# Ensure backend/ is cwd so app.config and DB (settings) load from here
-_backend = os.path.dirname(os.path.abspath(__file__))
-os.chdir(_backend)
+_BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(_BACKEND_ROOT)
 
 from app.knowledge_base import search
 from app.settings_store import get_kb_config

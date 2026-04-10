@@ -1,12 +1,18 @@
-"""Test LLM call (stage 2.1): run from backend/ with venv activated.
-Requires DEEPSEEK_API_KEY in .env."""
+"""LLM 调用联调脚本（stage 2.1）。
+
+在 backend/ 目录下：
+
+  python scripts/run_llm_demo.py
+
+需在 .env 中配置 DEEPSEEK_API_KEY 等。
+"""
 import os
 
-# Ensure backend/ is cwd so app.config loads .env from here
-_backend = os.path.dirname(os.path.abspath(__file__))
-os.chdir(_backend)
+_BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(_BACKEND_ROOT)
 
 from app.llm import call_llm
+
 
 def main():
     print("Calling DeepSeek (deepseek-chat)...")
@@ -17,6 +23,7 @@ def main():
     )
     print("Response:", content)
     print("OK")
+
 
 if __name__ == "__main__":
     main()
