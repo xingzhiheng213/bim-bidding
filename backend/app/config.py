@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path)
 
+# HTTP API: clients must send X-API-Key matching this value. Empty = authentication disabled (not for production).
+ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "").strip()
+
 REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 DATABASE_URL: str = os.getenv(
     "DATABASE_URL",

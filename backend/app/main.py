@@ -2,25 +2,42 @@
 import logging
 import os
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import verify_api_key
+from app import config
 from app.database import check_db, engine
 from app.models import Base
 from sqlalchemy import text
 from app.routers import compare, settings, tasks
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="BIM 标书生成 API", version="0.1.0")
+app = FastAPI(
+    title="BIM 标书生成 API",
+    version="0.1.0",
+    dependencies=[Depends(verify_api_key)],
+)
 app.include_router(tasks.router)
 app.include_router(compare.router, prefix="/api")
 app.include_router(settings.router, prefix="/api/settings")
 
-# CORS: allow frontend dev server (e.g. localhost:5173)
+# CORS: allow frontend dev server (localhost) + optional LAN Vite (same port 5173)
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip().split(",")
+_cors_allow_lan_vite = os.getenv("CORS_ALLOW_LAN_VITE", "1").strip().lower() not in ("0", "false", "no", "")
+# 内网用 IP 打开 Vite（如 http://192.168.2.14:5173）时与 API 不同源，需放行对应 Origin
+_LAN_VITE_ORIGIN_REGEX = (
+    r"^http://("
+    r"localhost|127\.0\.0\.1|"
+    r"192\.168\.\d{1,3}\.\d{1,3}|"
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}"
+    r"):5173$"
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _cors_origins if o.strip()],
+    allow_origin_regex=_LAN_VITE_ORIGIN_REGEX if _cors_allow_lan_vite else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -30,21 +47,10 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     """Test DB connection and create tables if not exist."""
-    # Security check: warn loudly if SETTINGS_SECRET_KEY is not set
-    if not os.getenv("SETTINGS_SECRET_KEY", "").strip():
+    if not (config.ADMIN_API_KEY or "").strip():
         logger.warning(
-            "\n"
-            "╔══════════════════════════════════════════════════════════════╗\n"
-            "║  ⚠  SECURITY WARNING: SETTINGS_SECRET_KEY is not set!       ║\n"
-            "║  API Keys stored in the database are encrypted with a        ║\n"
-            "║  publicly known placeholder key. Anyone with a DB dump can   ║\n"
-            "║  instantly decrypt your DeepSeek / RAGFlow API keys.         ║\n"
-            "║                                                               ║\n"
-            "║  Generate a key:                                              ║\n"
-            "║    python -c \"from cryptography.fernet import Fernet;        ║\n"
-            "║               print(Fernet.generate_key().decode())\"         ║\n"
-            "║  Then set SETTINGS_SECRET_KEY=<key> in your .env file.       ║\n"
-            "╚══════════════════════════════════════════════════════════════╝"
+            "ADMIN_API_KEY is not set: HTTP API authentication is disabled. "
+            "Set ADMIN_API_KEY in .env for production."
         )
     try:
         check_db()

@@ -1,5 +1,4 @@
 """Encrypt/decrypt and DB read/write for LLM API keys (stage 5.1)."""
-import base64
 import logging
 import os
 from datetime import datetime
@@ -14,20 +13,20 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_PROVIDERS = ("deepseek",)
 
-# Fixed dev placeholder key so FastAPI and Celery workers decrypt the same stored API keys when SETTINGS_SECRET_KEY is unset. Must decode to 32 bytes.
-_DEV_PLACEHOLDER_KEY = base64.urlsafe_b64encode(b"dev-placeholder-key-32bytes!!!!!")
-
-# Fernet key: 32 bytes base64. If not set, use fixed dev placeholder so all processes (FastAPI + Celery) share the same key.
+# Fernet key (URL-safe base64, 32 bytes). SEC-02: no placeholder fallback — missing or invalid key fails at import.
 _SETTINGS_SECRET_KEY = os.getenv("SETTINGS_SECRET_KEY", "").strip()
-if _SETTINGS_SECRET_KEY:
-    try:
-        _fernet = Fernet(_SETTINGS_SECRET_KEY.encode() if isinstance(_SETTINGS_SECRET_KEY, str) else _SETTINGS_SECRET_KEY)
-    except Exception as e:
-        logger.warning("SETTINGS_SECRET_KEY invalid, using placeholder: %s", e)
-        _fernet = Fernet(_DEV_PLACEHOLDER_KEY)
-else:
-    logger.warning("SETTINGS_SECRET_KEY not set; using dev-only placeholder key (same in all processes)")
-    _fernet = Fernet(_DEV_PLACEHOLDER_KEY)
+if not _SETTINGS_SECRET_KEY:
+    raise RuntimeError(
+        "SETTINGS_SECRET_KEY 未配置，服务拒绝启动。"
+        "请执行: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        " 并将输出写入 backend/.env 中的 SETTINGS_SECRET_KEY=..."
+    )
+try:
+    _fernet = Fernet(_SETTINGS_SECRET_KEY.encode("utf-8"))
+except Exception as e:
+    raise RuntimeError(
+        f"SETTINGS_SECRET_KEY 不是有效的 Fernet 密钥: {e}"
+    ) from e
 
 
 def _get_fernet() -> Fernet:
