@@ -10,7 +10,17 @@ from app import config
 from app.database import check_db, engine
 from app.models import Base
 from sqlalchemy import text
-from app.routers import compare, settings, tasks
+from app.routers import (
+    chapters as chapters_router,
+    compare,
+    export as export_router,
+    framework as framework_router,
+    review as review_router,
+    settings,
+    steps,
+    tasks,
+    upload,
+)
 
 logger = logging.getLogger(__name__)
 app = FastAPI(
@@ -19,6 +29,12 @@ app = FastAPI(
     dependencies=[Depends(verify_api_key)],
 )
 app.include_router(tasks.router)
+app.include_router(upload.router)
+app.include_router(steps.router)
+app.include_router(framework_router.router)
+app.include_router(chapters_router.router)
+app.include_router(review_router.router)
+app.include_router(export_router.router)
 app.include_router(compare.router, prefix="/api")
 app.include_router(settings.router, prefix="/api/settings")
 
