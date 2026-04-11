@@ -17,6 +17,8 @@ pytest tests/test_export_docx.py -q
 
 `tests/conftest.py` 会在未设置 `SETTINGS_SECRET_KEY` 时为测试进程生成临时 Fernet 密钥，以便导入 `app`；生产环境仍须在 `.env` 中配置真实密钥。
 
+运行时配置由 **`pydantic-settings`** 从**环境变量**与 **`backend/.env`** 加载，定义见 [`app/config.py`](app/config.py) 中的 `Settings`；导入 `app` 时会实例化 `settings` 并保留 `config.XXX` 模块别名以兼容旧代码。
+
 ## CI（与 `.github/workflows/ci.yml` 一致）
 
 在 **`backend/`** 下执行（与 Actions 中 `backend` job 等价；CI 使用 Python **3.12**）。开发依赖见 `requirements-dev.txt`（生产部署只需 `requirements.txt`）：

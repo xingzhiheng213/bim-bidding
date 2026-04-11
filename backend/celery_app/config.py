@@ -1,16 +1,8 @@
 """Celery configuration: broker, backend, serialization."""
-import os
-from pathlib import Path
+from app.config import settings
 
-from dotenv import load_dotenv
-
-_env_path = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(_env_path)
-
-REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-
-broker_url = REDIS_URL
-result_backend = REDIS_URL
+broker_url = settings.redis_url
+result_backend = settings.redis_url
 task_serializer = "json"
 result_serializer = "json"
 accept_content = ["json"]

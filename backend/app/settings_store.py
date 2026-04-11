@@ -1,11 +1,11 @@
 """Encrypt/decrypt and DB read/write for LLM API keys (stage 5.1)."""
 import logging
-import os
 from datetime import datetime
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import SessionLocal
 from app.models import ExportFormatSetting, KbSetting, LlmSetting
 
@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 SUPPORTED_PROVIDERS = ("deepseek",)
 
 # Fernet key (URL-safe base64, 32 bytes). SEC-02: no placeholder fallback — missing or invalid key fails at import.
-_SETTINGS_SECRET_KEY = os.getenv("SETTINGS_SECRET_KEY", "").strip()
+# 值来自 pydantic-settings（.env / 环境变量 SETTINGS_SECRET_KEY），与 os.getenv 双轨已去除。
+_SETTINGS_SECRET_KEY = settings.settings_secret_key
 if not _SETTINGS_SECRET_KEY:
     raise RuntimeError(
         "SETTINGS_SECRET_KEY 未配置，服务拒绝启动。"
