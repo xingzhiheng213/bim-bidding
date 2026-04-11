@@ -51,6 +51,18 @@ npm run test
 
 监听模式：`npm run test:watch`。详见 `vite.config.ts` 中 `test` 配置与 `src/test/setup.ts`。
 
+## CI（与 `.github/workflows/ci.yml` 一致）
+
+在 **`frontend/`** 下执行（与 Actions 中 `frontend` job 等价；CI 使用 Node **20**）：
+
+```bash
+npm ci
+npm run lint
+npx tsc -b
+```
+
+`npm run build` 会额外执行 Vite 打包；流水线为加快反馈仅跑 `tsc -b` 做类型检查。
+
 ## 验收（阶段 0.2）
 
 - `npm run dev` 能启动前端，浏览器打开显示「BIM 标书生成」标题。

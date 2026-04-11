@@ -6,13 +6,12 @@ all step-trigger endpoints and to centralise pure domain helpers.
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import Task, TaskStep
-
 
 # ---------------------------------------------------------------------------
 # Task / Step lookup helpers

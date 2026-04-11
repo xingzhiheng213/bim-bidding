@@ -8,6 +8,9 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from tasks.analyze import run_analyze
+from tasks.extract import run_extract
+from tasks.params import run_params
 
 from app.database import get_db
 from app.services.step_service import (
@@ -16,9 +19,6 @@ from app.services.step_service import (
     require_step_completed,
     require_task,
 )
-from tasks.analyze import run_analyze
-from tasks.extract import run_extract
-from tasks.params import run_params
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 

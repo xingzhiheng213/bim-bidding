@@ -6,10 +6,6 @@ Output format: {"total": N, "current": k, "chapters": {"1": "markdown...", "2": 
 import json
 import logging
 
-from celery_app import app
-from sqlalchemy.orm import Session
-
-from app import config
 from app.database import SessionLocal
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
@@ -20,6 +16,8 @@ from app.prompts import (
     build_chapter_regenerate_messages,
     framework_chapter_to_outline,
 )
+from celery_app import app
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +290,7 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
         from app.llm_resolver import get_llm_for_step
         provider, model = get_llm_for_step("chapters")
 
-        for idx, ch in enumerate(selected):
+        for _idx, ch in enumerate(selected):
             num = ch.get("number")
             full_name = ch.get("full_name") or f"第{num}章 {ch.get('title', '')}"
 

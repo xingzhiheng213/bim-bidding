@@ -8,6 +8,7 @@ Word OOXML: font.name sets w:ascii/w:hAnsi (Latin); Chinese uses w:eastAsia, so 
 from __future__ import annotations
 
 import re
+
 import markdown
 from bs4 import BeautifulSoup
 from docx import Document

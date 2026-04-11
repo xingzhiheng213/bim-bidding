@@ -3,6 +3,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from tasks.framework import run_framework
 
 from app.database import get_db
 from app.diff_compare import compute_diff
@@ -16,7 +17,6 @@ from app.services.step_service import (
     require_step_completed,
     require_task,
 )
-from tasks.framework import run_framework
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 

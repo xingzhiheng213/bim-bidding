@@ -4,7 +4,7 @@ Abstract interface: search(query, top_k) -> list[str].
 Adapters: ragflow (RAGFlow /api/v1/retrieval); none = return [].
 """
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 import httpx
 

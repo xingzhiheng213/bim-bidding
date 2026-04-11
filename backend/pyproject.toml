@@ -1,0 +1,21 @@
+[tool.ruff]
+target-version = "py311"
+src = ["app", "celery_app", "tasks", "tests"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# 首期 CI：B008 与 FastAPI 的 Depends()/Body()/File() 惯用法冲突；B904/E501 见评估后续收紧
+ignore = ["B904", "E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# 先 chdir 再 import，保证与联调脚本一致
+"tests/test_assembler.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_configs = true
+ignore_missing_imports = true
+explicit_package_bases = true
+namespace_packages = true
+mypy_path = "."

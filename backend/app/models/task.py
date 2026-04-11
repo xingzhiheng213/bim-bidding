@@ -1,7 +1,7 @@
 """Task and TaskStep models for BIM bidding workflow."""
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, Integer
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 

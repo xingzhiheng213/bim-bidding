@@ -2,14 +2,12 @@
 import json
 import logging
 
-from celery_app import app
-from sqlalchemy.orm import Session
-
-from app import config
 from app.database import SessionLocal
 from app.llm import call_llm
 from app.models import Task, TaskStep
 from app.prompts import build_analyze_messages
+from celery_app import app
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 

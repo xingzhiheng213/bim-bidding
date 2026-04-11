@@ -4,22 +4,30 @@ import os
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
-from app.auth import verify_api_key
 from app import config
+from app.auth import verify_api_key
 from app.database import check_db, engine
 from app.models import Base
-from sqlalchemy import text
 from app.routers import (
     chapters as chapters_router,
+)
+from app.routers import (
     compare,
-    export as export_router,
-    framework as framework_router,
-    review as review_router,
     settings,
     steps,
     tasks,
     upload,
+)
+from app.routers import (
+    export as export_router,
+)
+from app.routers import (
+    framework as framework_router,
+)
+from app.routers import (
+    review as review_router,
 )
 
 logger = logging.getLogger(__name__)

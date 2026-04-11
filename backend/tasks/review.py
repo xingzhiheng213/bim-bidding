@@ -6,15 +6,14 @@ writes result to review step output_snapshot = {"chapters": {"1": [...], "2": [.
 import json
 import logging
 
-from celery_app import app
-from sqlalchemy.orm import Session
-
 from app import config
 from app.database import SessionLocal
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
 from app.models import Task, TaskStep
 from app.prompts import build_review_messages, parse_review_output
+from celery_app import app
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 

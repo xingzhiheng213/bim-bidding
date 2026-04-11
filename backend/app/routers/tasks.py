@@ -12,6 +12,7 @@ import logging
 import shutil
 from datetime import datetime
 
+from celery_app import app as celery_app
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
 
@@ -20,9 +21,9 @@ from app.database import get_db
 from app.models import Task, TaskStep
 from app.schemas.compare import ChapterCompareMetaItem, CompareMetaResponse, FrameworkCompareMeta
 from app.schemas.task import (
+    DEFAULT_INITIAL_STEPS,
     CreateTaskRequest,
     CreateTaskResponse,
-    DEFAULT_INITIAL_STEPS,
     TaskCompareSummary,
     TaskDetailResponse,
     TaskStepSchema,
@@ -33,7 +34,6 @@ from app.services.step_service import (
     compute_compare_meta_from_steps,
     require_task,
 )
-from celery_app import app as celery_app
 
 logger = logging.getLogger(__name__)
 

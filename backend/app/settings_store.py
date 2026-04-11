@@ -7,7 +7,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import LlmSetting, ExportFormatSetting, KbSetting
+from app.models import ExportFormatSetting, KbSetting, LlmSetting
 
 logger = logging.getLogger(__name__)
 
@@ -317,7 +317,6 @@ def _kb_config_from_env() -> dict:
 
 def get_kb_config() -> dict:
     """Return kb_type and RAGFlow config (masked key only). From DB row or env default."""
-    from app import config
     db: Session = SessionLocal()
     try:
         row = db.query(KbSetting).first()

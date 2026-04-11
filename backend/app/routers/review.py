@@ -3,6 +3,8 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from tasks.chapters import regenerate_chapter
+from tasks.review import run_review, run_review_chapter
 
 from app.database import get_db
 from app.models import TaskStep
@@ -13,8 +15,6 @@ from app.services.step_service import (
     require_step_completed,
     require_task,
 )
-from tasks.chapters import regenerate_chapter
-from tasks.review import run_review, run_review_chapter
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 

@@ -3,7 +3,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-
 DEFAULT_INITIAL_STEPS = ["upload", "analyze", "framework", "chapters", "export"]
 
 

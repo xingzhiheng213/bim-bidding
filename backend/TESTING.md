@@ -17,6 +17,19 @@ pytest tests/test_export_docx.py -q
 
 `tests/conftest.py` 会在未设置 `SETTINGS_SECRET_KEY` 时为测试进程生成临时 Fernet 密钥，以便导入 `app`；生产环境仍须在 `.env` 中配置真实密钥。
 
+## CI（与 `.github/workflows/ci.yml` 一致）
+
+在 **`backend/`** 下执行（与 Actions 中 `backend` job 等价；CI 使用 Python **3.12**）。开发依赖见 `requirements-dev.txt`（生产部署只需 `requirements.txt`）：
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+ruff check app celery_app tasks tests
+mypy app --follow-imports=skip
+pytest
+```
+
+说明：`mypy` 当前仅检查 `app` 包且 `--follow-imports=skip`，避免 Celery `tasks/` 与部分第三方类型标注阻塞流水线；规则与忽略项见 `pyproject.toml` 中 `[tool.ruff]` / `[tool.mypy]`。
+
 ## 本地联调脚本（非 pytest）
 
 位于 **`scripts/`**，需从 **`backend/`** 作为当前目录运行：

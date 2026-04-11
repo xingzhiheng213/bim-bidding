@@ -1,15 +1,13 @@
 """Celery task: parse uploaded document and write text to extract step."""
 import json
 import logging
-from pathlib import Path
-
-from celery_app import app
-from sqlalchemy.orm import Session
 
 from app import config
 from app.database import SessionLocal
 from app.models import Task, TaskStep
 from app.parser import parse_document
+from celery_app import app
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 

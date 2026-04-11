@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.knowledge_base import test_ragflow_connection
 from app.settings_store import (
+    SUPPORTED_PROVIDERS,
     clear_llm_config,
     get_all_providers_status,
     get_export_format_config,
@@ -16,7 +17,6 @@ from app.settings_store import (
     set_export_format_config,
     set_kb_config,
     update_base_url_in_db,
-    SUPPORTED_PROVIDERS,
 )
 
 router = APIRouter(tags=["settings"])
