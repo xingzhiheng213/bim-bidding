@@ -405,7 +405,7 @@ export default function OneClickTaskDetailPage() {
     if (id == null) return
     try {
       await cancelTask(id)
-    } catch (_e) {
+    } catch {
       message.warning('取消请求未生效，请稍后重试')
     }
     if (typeof sessionStorage !== 'undefined') {

@@ -53,7 +53,7 @@ npm run test
 
 ## CI（与 `.github/workflows/ci.yml` 一致）
 
-在 **`frontend/`** 下执行（与 Actions 中 `frontend` job 等价；CI 使用 Node **20**）：
+在 **`frontend/`** 下执行（与 Actions 中 `frontend` job 等价；CI 使用 Node **22**）：
 
 ```bash
 npm ci
