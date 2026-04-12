@@ -4,6 +4,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
+import { SelectedProfileProvider } from './context/SelectedProfileContext'
 import './index.css'
 import { themeConfig } from './theme/config'
 
@@ -20,9 +21,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <ConfigProvider theme={themeConfig}>
-          <App />
-        </ConfigProvider>
+        <SelectedProfileProvider>
+          <ConfigProvider theme={themeConfig}>
+            <App />
+          </ConfigProvider>
+        </SelectedProfileProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </React.StrictMode>,

@@ -7,6 +7,7 @@ from tasks.framework import run_framework
 
 from app.database import get_db
 from app.diff_compare import compute_diff
+from app.params_compat import params_snapshot_has_requirements_list
 from app.models import TaskStep
 from app.schemas.compare import DiffResponse
 from app.schemas.task import AcceptFrameworkRequest
@@ -29,7 +30,7 @@ def run_framework_step(task_id: int, db: Session = Depends(get_db)):
     params_step = require_step_completed(task_id, "params", db, "请先完成参数提取")
     try:
         output = json.loads(params_step.output_snapshot)  # type: ignore[arg-type]
-        if not isinstance(output.get("bim_requirements"), list):
+        if not params_snapshot_has_requirements_list(output):
             raise HTTPException(status_code=400, detail="请先完成参数提取")
     except (json.JSONDecodeError, TypeError):
         raise HTTPException(status_code=400, detail="请先完成参数提取")

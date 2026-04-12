@@ -5,10 +5,13 @@ Framework step is set to waiting_user on success (user must accept/regenerate/ad
 import json
 import logging
 
+from app import config
 from app.database import SessionLocal
+from app.params_compat import extract_requirements_list
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
 from app.models import Task, TaskStep
+from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_framework_messages, parse_framework_text
 from celery_app import app
 from sqlalchemy.orm import Session
@@ -19,8 +22,6 @@ FRAMEWORK_TEMPERATURE = 0.4
 # 有用户要点时用更低温度，减少对「未要求部分」的随意改写
 FRAMEWORK_TEMPERATURE_WITH_USER_POINTS = 0.1
 ERROR_MESSAGE_MAX_LEN = 2000
-# Truncate analyze text for KB query to avoid huge requests
-KB_QUERY_MAX_LEN = 500
 
 
 def _get_or_create_framework_step(db: Session, task_id: int) -> TaskStep:
@@ -48,7 +49,7 @@ def _set_framework_failed(db: Session, task_id: int, error_message: str) -> None
 def run_framework(task_id: int) -> None:
     """Generate framework from analyze + params + KB; write chapters to framework step.
 
-    Reads analyze step text, params step (bim_requirements etc.), calls KB search,
+    Reads analyze step text, params step (key_requirements etc.), calls KB search,
     then LLM with framework prompt, parses "第X章 标题" into chapters, writes
     framework step output_snapshot = {"chapters": [...]}. On failure sets
     framework step status=failed and error_message.
@@ -84,10 +85,7 @@ def run_framework(task_id: int) -> None:
             _set_framework_failed(db, task_id, "参数步骤输出格式异常")
             return
 
-        bim_requirements = params_output.get("bim_requirements")
-        if not isinstance(bim_requirements, list):
-            bim_requirements = []
-        bim_requirements = [str(x) for x in bim_requirements]
+        requirements_list = extract_requirements_list(params_output)
         scoring_items = params_output.get("scoring_items")
         if not isinstance(scoring_items, list):
             scoring_items = []
@@ -106,7 +104,11 @@ def run_framework(task_id: int) -> None:
         analyze_text = str(analyze_text)
 
         # KB search: query = truncated analyze or fixed string (Dify used llm.text)
-        query = analyze_text[:KB_QUERY_MAX_LEN].strip() if analyze_text else "BIM技术标框架"
+        query = (
+            analyze_text[: config.FRAMEWORK_KB_QUERY_MAX_LEN].strip()
+            if analyze_text
+            else config.FRAMEWORK_KB_FALLBACK_QUERY
+        )
         chunks = kb_search(query=query, top_k=10)
         context_text = "\n\n".join(chunks) if chunks else ""
 
@@ -126,13 +128,15 @@ def run_framework(task_id: int) -> None:
                 pass
 
         # 有用户要点时只传「当前框架 + 要点」；无要点时传完整 analyze + params + context
+        merged = load_merged_semantic_for_task(db, task_id)
         messages = build_framework_messages(
             analyze_text=analyze_text,
-            bim_requirements=bim_requirements,
+            requirements=requirements_list,
             context_text=context_text,
             extra_points=extra_points if extra_points else None,
             current_chapters=current_chapters if extra_points else None,
             scoring_items=scoring_items,
+            semantic_overrides=merged,
         )
         from app.llm_resolver import get_llm_for_step
         provider, model = get_llm_for_step("framework")

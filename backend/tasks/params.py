@@ -1,11 +1,13 @@
-"""Celery task: extract project_info, bim_requirements, risk_points from analyze text."""
+"""Celery task: extract project_info, key_requirements, risk_points from analyze text."""
 import json
 import logging
 import re
 
 from app.database import SessionLocal
+from app.params_compat import REQUIREMENTS_JSON_KEY, coalesce_requirements_from_llm_raw
 from app.llm import call_llm
 from app.models import Task, TaskStep
+from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_params_messages
 from celery_app import app
 from sqlalchemy.orm import Session
@@ -48,8 +50,11 @@ def _extract_json_from_response(text: str) -> str:
 
 
 def _normalize_params(raw: dict) -> dict:
-    """Ensure project_info (dict), bim_requirements (list[str]), risk_points (list[str]), scoring_items (list[str]);
-    optional: construction_goals, standards_refs, deliverables (list[str] each)."""
+    """Ensure project_info (dict), key_requirements (list[str]), risk_points (list[str]), scoring_items (list[str]);
+    optional: construction_goals, standards_refs, deliverables (list[str] each).
+
+    Accepts LLM output with key_requirements or legacy bim_requirements; persists only key_requirements.
+    """
     project_info = raw.get("project_info")
     if project_info is None:
         project_info = {}
@@ -61,10 +66,7 @@ def _normalize_params(raw: dict) -> dict:
     if not isinstance(project_info, dict):
         project_info = {}
 
-    bim_requirements = raw.get("bim_requirements")
-    if not isinstance(bim_requirements, list):
-        bim_requirements = []
-    bim_requirements = [str(x) for x in bim_requirements]
+    key_requirements = coalesce_requirements_from_llm_raw(raw)
 
     risk_points = raw.get("risk_points")
     if not isinstance(risk_points, list):
@@ -88,7 +90,7 @@ def _normalize_params(raw: dict) -> dict:
 
     return {
         "project_info": project_info,
-        "bim_requirements": bim_requirements,
+        REQUIREMENTS_JSON_KEY: key_requirements,
         "risk_points": risk_points,
         "scoring_items": scoring_items,
         "construction_goals": construction_goals,
@@ -102,7 +104,7 @@ def run_params(task_id: int) -> None:
     """Extract params from analyze step text and write to params step.
 
     Reads analyze step output_snapshot["text"], calls LLM with params prompt,
-    parses JSON, normalizes to project_info / bim_requirements / risk_points,
+    parses JSON, normalizes to project_info / key_requirements / risk_points,
     then creates/updates params step with output_snapshot. On failure sets
     params step status=failed and error_message.
     """
@@ -137,7 +139,8 @@ def run_params(task_id: int) -> None:
             return
         analyze_text = str(analyze_text)
 
-        messages = build_params_messages(analyze_text)
+        merged = load_merged_semantic_for_task(db, task_id)
+        messages = build_params_messages(analyze_text, semantic_overrides=merged)
         from app.llm_resolver import get_llm_for_step
         provider, model = get_llm_for_step("params")
 
@@ -167,10 +170,10 @@ def run_params(task_id: int) -> None:
         params_step.error_message = None
         db.commit()
         logger.info(
-            "run_params: task_id=%s params completed, project_info keys=%s, bim=%s, risk=%s, scoring=%s",
+            "run_params: task_id=%s params completed, project_info keys=%s, key_requirements=%s, risk=%s, scoring=%s",
             task_id,
             len(normalized["project_info"]),
-            len(normalized["bim_requirements"]),
+            len(normalized[REQUIREMENTS_JSON_KEY]),
             len(normalized["risk_points"]),
             len(normalized["scoring_items"]),
         )

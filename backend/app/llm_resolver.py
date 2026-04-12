@@ -7,6 +7,10 @@ _STEP_ENV_MAP = {
     "framework": (config.FRAMEWORK_LLM_PROVIDER, config.FRAMEWORK_LLM_MODEL),
     "chapters": (config.CHAPTER_LLM_PROVIDER, config.CHAPTER_LLM_MODEL),
     "review": (config.CHAPTER_LLM_PROVIDER, config.CHAPTER_LLM_MODEL),
+    "prompt_profile_generate": (
+        config.PROMPT_PROFILE_GEN_LLM_PROVIDER,
+        config.PROMPT_PROFILE_GEN_LLM_MODEL,
+    ),
 }
 
 

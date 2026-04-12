@@ -441,7 +441,7 @@ def _parse_raw_markdown_table(text: str) -> tuple[list[list[str]], str] | None:
 
 def add_cover_page(doc: Document, title: str, opts: dict) -> None:
     """Add a cover page: one centered title paragraph, then page break."""
-    p = doc.add_paragraph(title.strip() or "请输入BIM技术标标题")
+    p = doc.add_paragraph(title.strip() or "请输入标书标题")
     p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
     for run in p.runs:
         font_name = opts.get("heading_1_font") or opts.get("body_font")

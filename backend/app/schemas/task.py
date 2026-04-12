@@ -10,6 +10,7 @@ class CreateTaskRequest(BaseModel):
     """Request body for POST /api/tasks."""
     initial_steps: list[str] | None = None  # default applied in route
     name: str | None = None
+    profile_id: int | None = None
 
 
 class AcceptFrameworkRequest(BaseModel):
@@ -60,6 +61,8 @@ class CreateTaskResponse(BaseModel):
     name: str | None = None
     status: str
     created_at: datetime
+    profile_id: int | None = None
+    profile_name: str | None = None
 
 
 class TaskDetailResponse(BaseModel):
@@ -70,6 +73,8 @@ class TaskDetailResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    profile_id: int | None = None
+    profile_name: str | None = None
     steps: list[TaskStepSchema]
 
 
@@ -86,4 +91,6 @@ class TaskSummary(BaseModel):
     name: str | None = None
     status: str
     created_at: datetime
+    profile_id: int | None = None
+    profile_name: str | None = None
     compare_summary: TaskCompareSummary | None = None

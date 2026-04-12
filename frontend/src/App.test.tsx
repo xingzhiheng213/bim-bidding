@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ConfigProvider } from 'antd'
 import type { ReactNode } from 'react'
 import App from './App'
+import { SelectedProfileProvider } from './context/SelectedProfileContext'
 import { themeConfig } from './theme/config'
 
 function TestProviders({ children }: { children: ReactNode }) {
@@ -13,7 +14,9 @@ function TestProviders({ children }: { children: ReactNode }) {
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <MemoryRouter initialEntries={['/']}>
-        <ConfigProvider theme={themeConfig}>{children}</ConfigProvider>
+        <SelectedProfileProvider>
+          <ConfigProvider theme={themeConfig}>{children}</ConfigProvider>
+        </SelectedProfileProvider>
       </MemoryRouter>
     </QueryClientProvider>
   )
@@ -22,6 +25,6 @@ function TestProviders({ children }: { children: ReactNode }) {
 describe('App', () => {
   it('renders shell with app title', async () => {
     render(<App />, { wrapper: TestProviders })
-    expect(await screen.findByText('BIM 标书生成')).toBeInTheDocument()
+    expect(await screen.findByText('工程设计标书生成系统')).toBeInTheDocument()
   })
 })

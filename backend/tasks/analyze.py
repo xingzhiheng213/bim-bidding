@@ -5,6 +5,7 @@ import logging
 from app.database import SessionLocal
 from app.llm import call_llm
 from app.models import Task, TaskStep
+from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_analyze_messages
 from celery_app import app
 from sqlalchemy.orm import Session
@@ -75,7 +76,8 @@ def run_analyze(task_id: int) -> None:
             return
         extracted_text = str(extracted_text)
 
-        messages = build_analyze_messages(extracted_text)
+        merged = load_merged_semantic_for_task(db, task_id)
+        messages = build_analyze_messages(extracted_text, semantic_overrides=merged)
         from app.llm_resolver import get_llm_for_step
         provider, model = get_llm_for_step("analyze")
 

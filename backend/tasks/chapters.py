@@ -7,9 +7,11 @@ import json
 import logging
 
 from app.database import SessionLocal
+from app.params_compat import extract_requirements_list
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
 from app.models import Task, TaskStep
+from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import (
     build_chapter_content_messages,
     build_chapter_outline_messages,
@@ -64,6 +66,8 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
         raise ValueError(f"第{chapter_number}章不存在")
     current_content = chapters_dict.get(str(chapter_number)) or ""
 
+    merged = load_merged_semantic_for_task(db, task_id)
+
     framework_step = (
         db.query(TaskStep)
         .filter(TaskStep.task_id == task_id, TaskStep.step_key == "framework")
@@ -96,6 +100,7 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
             chapter_full_name=full_name,
             current_content=current_content,
             added_points=chapter_points,
+            semantic_overrides=merged,
         )
         chapter_content = call_llm(
             provider=provider,
@@ -123,8 +128,7 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
             raise ValueError("分析步骤输出格式异常")
         try:
             params_out = json.loads(params_step.output_snapshot)
-            bim_requirements = params_out.get("bim_requirements") or []
-            bim_requirements = [str(x) for x in bim_requirements] if isinstance(bim_requirements, list) else []
+            requirements_list = extract_requirements_list(params_out)
             project_info = params_out.get("project_info") or {}
             project_info = project_info if isinstance(project_info, dict) else {}
             risk_points = params_out.get("risk_points") or []
@@ -137,7 +141,12 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
         outline_content = framework_chapter_to_outline(ch_info or {})
         if not outline_content:
             outline_messages = build_chapter_outline_messages(
-                full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
+                full_name,
+                analyze_text,
+                requirements_list,
+                risk_points=risk_points,
+                scoring_items=scoring_items,
+                semantic_overrides=merged,
             )
             outline_content = call_llm(
                 provider=provider,
@@ -151,10 +160,11 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
             chapter_full_name=full_name,
             outline_text=outline_content,
             context_text=context_text,
-            bim_requirements=bim_requirements,
+            requirements=requirements_list,
             project_info=project_info,
             risk_points=risk_points,
             scoring_items=scoring_items,
+            semantic_overrides=merged,
         )
         chapter_content = call_llm(
             provider=provider,
@@ -260,10 +270,7 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
 
         try:
             params_out = json.loads(params_step.output_snapshot)
-            bim_requirements = params_out.get("bim_requirements")
-            if not isinstance(bim_requirements, list):
-                bim_requirements = []
-            bim_requirements = [str(x) for x in bim_requirements]
+            requirements_list = extract_requirements_list(params_out)
             project_info = params_out.get("project_info")
             if not isinstance(project_info, dict):
                 project_info = {}
@@ -278,6 +285,8 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
         except (json.JSONDecodeError, TypeError):
             _set_chapters_failed(db, task_id, "参数步骤输出格式异常")
             return
+
+        merged = load_merged_semantic_for_task(db, task_id)
 
         chapters_step = _get_or_create_chapters_step(db, task_id)
         chapters_step.status = "running"
@@ -311,7 +320,12 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
             if not outline_content:
                 try:
                     outline_messages = build_chapter_outline_messages(
-                        full_name, analyze_text, bim_requirements, risk_points=risk_points, scoring_items=scoring_items
+                        full_name,
+                        analyze_text,
+                        requirements_list,
+                        risk_points=risk_points,
+                        scoring_items=scoring_items,
+                        semantic_overrides=merged,
                     )
                     outline_content = call_llm(
                         provider=provider,
@@ -332,10 +346,11 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
                     chapter_full_name=full_name,
                     outline_text=outline_content,
                     context_text=context_text,
-                    bim_requirements=bim_requirements,
+                    requirements=requirements_list,
                     project_info=project_info,
                     risk_points=risk_points,
                     scoring_items=scoring_items,
+                    semantic_overrides=merged,
                 )
                 chapter_content = call_llm(
                     provider=provider,

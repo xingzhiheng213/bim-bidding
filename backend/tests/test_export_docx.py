@@ -4,7 +4,7 @@ from app.export_docx import markdown_to_docx
 
 def test_markdown_to_docx_basic():
     """Test basic markdown conversion: headings, lists, paragraphs."""
-    md = """# BIM技术标完整文档
+    md = """# 标书完整文档
 
 ## 项目信息
 

@@ -1,0 +1,39 @@
+"""Built-in engineering disciplines for PromptProfile (single source of truth)."""
+
+from __future__ import annotations
+
+from typing import Final
+
+DEFAULT_DISCIPLINE: Final[str] = "建筑"
+
+DISCIPLINES: Final[tuple[str, ...]] = (
+    "建筑",
+    "结构",
+    "给排水",
+    "暖通",
+    "电气",
+    "智能化",
+    "景观",
+    "内装",
+    "可研",
+    "造价",
+    "幕墙",
+)
+
+_DISCIPLINE_SET: Final[frozenset[str]] = frozenset(DISCIPLINES)
+
+
+def validate_discipline(raw: str) -> str:
+    """Return stripped discipline or raise ValueError."""
+    if raw is None:
+        raise ValueError("专业不能为空")
+    s = str(raw).strip()
+    if not s:
+        raise ValueError("专业不能为空")
+    if s not in _DISCIPLINE_SET:
+        raise ValueError(f"无效的专业: {s!r}，须为内置列表中的一项")
+    return s
+
+
+def list_disciplines() -> list[str]:
+    return list(DISCIPLINES)

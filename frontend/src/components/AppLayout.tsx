@@ -2,8 +2,16 @@
  * BIM 标书生成 App — 公共布局（UI 阶段 1.1）
  * 侧栏（Sider）+ 主内容区（Content）；子页面通过 Outlet 渲染在 Content 内。
  */
+import { useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
-import { Layout, Menu, Typography } from 'antd'
+import { Button, Divider, Layout, Menu, Select, Typography } from 'antd'
+import { listPromptProfiles } from '../api/promptProfiles'
+import {
+  profileIdToSelectValue,
+  selectValueToProfileId,
+  useSelectedProfile,
+} from '../context/SelectedProfileContext'
 import { designTokens } from '../theme/tokens'
 import '../App.css'
 
@@ -18,7 +26,10 @@ const mainNavItems = [
   { key: '/compare', label: '修正对比' },
   { key: '/review', label: '标书校审' },
 ]
-const bottomNavItems = [{ key: '/settings', label: '设置' }]
+const bottomNavItems = [
+  { key: '/scene-template', label: '场景与模板' },
+  { key: '/settings', label: '设置' },
+]
 
 const contentStyle: React.CSSProperties = {
   padding: designTokens.marginLG,
@@ -27,13 +38,28 @@ const contentStyle: React.CSSProperties = {
 export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { selectedProfileId, setSelectedProfileId } = useSelectedProfile()
+
+  const { data: profiles = [], isFetched: profilesFetched } = useQuery({
+    queryKey: ['prompt-profiles'],
+    queryFn: listPromptProfiles,
+  })
+
+  useEffect(() => {
+    if (!profilesFetched || selectedProfileId == null) return
+    if (!profiles.some((p) => p.id === selectedProfileId)) {
+      setSelectedProfileId(null)
+    }
+  }, [profilesFetched, profiles, selectedProfileId, setSelectedProfileId])
 
   const selectedKey =
     location.pathname === '/'
       ? '/'
       : location.pathname.startsWith('/one-click')
         ? '/one-click'
-        : location.pathname.startsWith('/settings')
+        : location.pathname.startsWith('/scene-template')
+          ? '/scene-template'
+          : location.pathname.startsWith('/settings')
           ? '/settings'
           : location.pathname.startsWith('/compare')
             ? '/compare'
@@ -83,8 +109,37 @@ export default function AppLayout() {
                 fontSize: designTokens.fontSizeHeading5,
               }}
             >
-              BIM 标书生成
+              工程设计标书生成系统
             </Title>
+            <Select
+              size="small"
+              style={{ width: '100%', marginTop: designTokens.marginSM }}
+              value={profileIdToSelectValue(selectedProfileId)}
+              onChange={(v) => setSelectedProfileId(selectValueToProfileId(v))}
+              options={[
+                { value: 'default', label: 'BIM技术标（内置）' },
+                ...profiles.map((p) => ({
+                  value: String(p.id),
+                  label: p.is_builtin ? `${p.name}（内置）` : p.name,
+                })),
+              ]}
+              popupMatchSelectWidth={false}
+              dropdownRender={(menu) => (
+                <>
+                  {menu}
+                  <Divider style={{ margin: '8px 0' }} />
+                  <Button
+                    type="link"
+                    block
+                    onClick={() => {
+                      navigate('/scene-template?create=1')
+                    }}
+                  >
+                    创建新配置
+                  </Button>
+                </>
+              )}
+            />
           </div>
           <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
             <Menu

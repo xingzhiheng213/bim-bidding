@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Button, Empty, Input, message, Modal, Popconfirm, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { createTask, deleteTask, getTasks, type TaskSummary } from '../api/tasks'
+import { useSelectedProfile } from '../context/SelectedProfileContext'
 import { designTokens } from '../theme/tokens'
 import { getStepStatusLabel, stepStatusDisplay, type StepStatus } from '../theme/stepStatus'
 import '../App.css'
@@ -22,6 +23,7 @@ function getTaskStatusDisplay(status: string): { tagColor: 'default' | 'primary'
 function OneClickPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { selectedProfileId } = useSelectedProfile()
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createTaskName, setCreateTaskName] = useState('')
   const {
@@ -32,7 +34,11 @@ function OneClickPage() {
     queryFn: getTasks,
   })
   const createMutation = useMutation({
-    mutationFn: (name: string) => createTask({ name: name.trim() || undefined }),
+    mutationFn: (name: string) =>
+      createTask({
+        name: name.trim() || undefined,
+        profileId: selectedProfileId ?? undefined,
+      }),
     onSuccess: (res) => {
       message.success('任务已创建')
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
@@ -93,6 +99,19 @@ function OneClickPage() {
         const { tagColor, label } = getTaskStatusDisplay(status)
         return <Tag color={tagColor}>{label}</Tag>
       },
+    },
+    {
+      title: '语义配置',
+      key: 'profile',
+      width: 160,
+      ellipsis: true,
+      render: (_, record) => (
+        <Text type="secondary" ellipsis={{ tooltip: true }}>
+          {record.profile_id != null
+            ? record.profile_name || `配置 #${record.profile_id}`
+            : '内置默认'}
+        </Text>
+      ),
     },
     {
       title: '创建时间',
@@ -167,6 +186,9 @@ function OneClickPage() {
         />
         <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
           不填写将自动生成默认名称，创建后进入任务上传招标文件并开始生成。
+        </Text>
+        <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12 }}>
+          将使用侧栏当前选中的语义配置；选「BIM技术标（内置）」则不绑定自定义 Profile。
         </Text>
       </Modal>
       <Title level={5} style={{ marginTop: designTokens.marginXL, marginBottom: designTokens.marginSM }}>

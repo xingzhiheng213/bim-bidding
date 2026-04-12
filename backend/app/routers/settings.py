@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.knowledge_base import test_ragflow_connection
+from app.prompt_catalog import PromptCatalogResponse, get_prompt_catalog
 from app.settings_store import (
     SUPPORTED_PROVIDERS,
     clear_llm_config,
@@ -91,6 +92,12 @@ def post_settings_llm(body: PostLlmBody):
                 "base_url": s.get("base_url"),
             }
     return {"provider": body.provider, "configured": False, "masked_key": None, "base_url": None}
+
+
+@router.get("/prompt-catalog", response_model=PromptCatalogResponse)
+def get_settings_prompt_catalog():
+    """Read-only: contract vs semantic prompt text for SceneTemplatePage review."""
+    return get_prompt_catalog()
 
 
 # --- Export format (stage 7.1) ---

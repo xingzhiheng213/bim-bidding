@@ -29,6 +29,7 @@ from app.routers import (
 from app.routers import (
     review as review_router,
 )
+from app.routers import prompt_profiles as prompt_profiles_router
 
 logger = logging.getLogger(__name__)
 app = FastAPI(
@@ -45,6 +46,7 @@ app.include_router(review_router.router)
 app.include_router(export_router.router)
 app.include_router(compare.router, prefix="/api")
 app.include_router(settings.router, prefix="/api/settings")
+app.include_router(prompt_profiles_router.router)
 
 # CORS: allow frontend dev server (localhost) + optional LAN Vite (same port 5173)
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip().split(",")
@@ -147,6 +149,44 @@ async def startup():
         logger.info("Index ix_task_steps_task_id_step_key ensured on task_steps")
     except Exception as e:
         logger.warning("Could not create index ix_task_steps_task_id_step_key: %s", e)
+
+    # Add profile_id to tasks (PromptProfile binding, Phase B)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN profile_id INTEGER"))
+            conn.commit()
+        logger.info("Added column profile_id to tasks")
+    except Exception as e:
+        err = str(e).lower()
+        if "duplicate" in err or "already exists" in err or "exists" in err:
+            logger.debug("Column profile_id already exists on tasks")
+        else:
+            logger.warning("Could not add profile_id to tasks: %s", e)
+
+    # Add discipline to prompt_profiles (semantic profile specialty)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE prompt_profiles ADD COLUMN discipline VARCHAR(32)"))
+            conn.commit()
+        logger.info("Added column discipline to prompt_profiles")
+    except Exception as e:
+        err = str(e).lower()
+        if "duplicate" in err or "already exists" in err or "exists" in err:
+            logger.debug("Column discipline already exists on prompt_profiles")
+        else:
+            logger.warning("Could not add discipline to prompt_profiles: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "UPDATE prompt_profiles SET discipline = '建筑' "
+                    "WHERE discipline IS NULL OR TRIM(discipline) = ''"
+                )
+            )
+            conn.commit()
+        logger.info("Backfilled prompt_profiles.discipline where null")
+    except Exception as e:
+        logger.warning("Could not backfill prompt_profiles.discipline: %s", e)
 
 
 @app.get("/health")

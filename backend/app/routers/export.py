@@ -1,5 +1,6 @@
 """Export endpoint: generate and download the assembled DOCX."""
 import io
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -30,13 +31,14 @@ def download_docx(task_id: int, db: Session = Depends(get_db)):
     doc.save(buffer)
     body = buffer.getvalue()
 
+    utf8_name = quote(f"标书_任务{task_id}.docx", safe="")
     return Response(
         content=body,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={
             "Content-Disposition": (
-                f'attachment; filename="BIM_bidding_task_{task_id}.docx"; '
-                f"filename*=UTF-8''BIM%E6%A0%87%E4%B9%A6_%E4%BB%BB%E5%8A%A1{task_id}.docx"
+                f'attachment; filename="bidding_task_{task_id}.docx"; '
+                f"filename*=UTF-8''{utf8_name}"
             ),
         },
     )

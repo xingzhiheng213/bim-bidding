@@ -15,6 +15,10 @@ class Task(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Optional semantic prompt profile (ON DELETE SET NULL on DB side where supported)
+    profile_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("prompt_profiles.id", ondelete="SET NULL"), nullable=True
+    )
     # Human-friendly name for task list; optional but recommended
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False)

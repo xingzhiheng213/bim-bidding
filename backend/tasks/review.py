@@ -8,9 +8,17 @@ import logging
 
 from app import config
 from app.database import SessionLocal
+from app.params_compat import extract_requirements_list
+from app.review_prompt_assembly import (
+    REVIEW_PARAMS_SECTION_KEY_REQUIREMENTS,
+    REVIEW_PARAMS_SECTION_PROJECT,
+    REVIEW_PARAMS_SECTION_RISK,
+    REVIEW_PARAMS_SECTION_SCORING,
+)
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
 from app.models import Task, TaskStep
+from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_review_messages, parse_review_output
 from celery_app import app
 from sqlalchemy.orm import Session
@@ -44,20 +52,20 @@ def _set_review_failed(db: Session, task_id: int, error_message: str) -> None:
 
 
 def _build_params_summary(params_out: dict) -> str:
-    """Build a single string from risk_points, bim_requirements, scoring_items for review prompt."""
+    """Build a single string from risk_points, key_requirements (legacy bim_requirements), scoring_items."""
     parts = []
     risk_points = params_out.get("risk_points")
     if isinstance(risk_points, list) and risk_points:
-        parts.append("【风险点/废标点】\n" + "\n".join(str(x) for x in risk_points if x))
-    bim_requirements = params_out.get("bim_requirements")
-    if isinstance(bim_requirements, list) and bim_requirements:
-        parts.append("【BIM 要求】\n" + "\n".join(str(x) for x in bim_requirements))
+        parts.append(REVIEW_PARAMS_SECTION_RISK + "\n" + "\n".join(str(x) for x in risk_points if x))
+    key_req = extract_requirements_list(params_out)
+    if key_req:
+        parts.append(REVIEW_PARAMS_SECTION_KEY_REQUIREMENTS + "\n" + "\n".join(str(x) for x in key_req))
     scoring_items = params_out.get("scoring_items")
     if isinstance(scoring_items, list) and scoring_items:
-        parts.append("【评分项】\n" + "\n".join(str(x) for x in scoring_items if x))
+        parts.append(REVIEW_PARAMS_SECTION_SCORING + "\n" + "\n".join(str(x) for x in scoring_items if x))
     project_info = params_out.get("project_info")
     if isinstance(project_info, dict) and project_info:
-        parts.append("【项目信息】\n" + json.dumps(project_info, ensure_ascii=False, indent=2))
+        parts.append(REVIEW_PARAMS_SECTION_PROJECT + "\n" + json.dumps(project_info, ensure_ascii=False, indent=2))
     text = "\n\n".join(parts) if parts else "（无）"
     return text.strip()[:PARAMS_SUMMARY_MAX_LEN]
 
@@ -157,6 +165,7 @@ def run_review(task_id: int) -> None:
         from app.llm_resolver import get_llm_for_step
 
         provider, model = get_llm_for_step("review")
+        merged = load_merged_semantic_for_task(db, task_id)
         selected = sorted(chapters_list, key=lambda ch: ch.get("number", 0))
         results_by_chapter: dict[str, list] = {}
 
@@ -173,8 +182,9 @@ def run_review(task_id: int) -> None:
                     chapter_full_name=full_name,
                     chapter_content=chapter_content,
                     analyze_text=analyze_text,
-                    params_risk_bim_scoring=params_summary,
+                    params_review_context=params_summary,
                     kb_context=kb_context,
+                    semantic_overrides=merged,
                 )
                 llm_text = call_llm(
                     provider=provider,
@@ -311,6 +321,7 @@ def run_review_chapter(task_id: int, chapter_number: int) -> None:
         from app.llm_resolver import get_llm_for_step
 
         provider, model = get_llm_for_step("review")
+        merged = load_merged_semantic_for_task(db, task_id)
         context_chunks = kb_search(query=full_name, top_k=REVIEW_KB_TOP_K)
         kb_context = "\n\n".join(context_chunks) if context_chunks else ""
 
@@ -319,8 +330,9 @@ def run_review_chapter(task_id: int, chapter_number: int) -> None:
                 chapter_full_name=full_name,
                 chapter_content=chapter_content,
                 analyze_text=analyze_text,
-                params_risk_bim_scoring=params_summary,
+                params_review_context=params_summary,
                 kb_context=kb_context,
+                semantic_overrides=merged,
             )
             llm_text = call_llm(
                 provider=provider,

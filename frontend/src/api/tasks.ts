@@ -19,6 +19,8 @@ export interface TaskDetail {
   status: string
   created_at: string
   updated_at: string
+  profile_id?: number | null
+  profile_name?: string | null
   steps: TaskStep[]
 }
 
@@ -27,6 +29,8 @@ export interface CreateTaskResponse {
   name: string | null
   status: string
   created_at: string
+  profile_id?: number | null
+  profile_name?: string | null
 }
 
 export interface TaskCompareSummary {
@@ -39,13 +43,20 @@ export interface TaskSummary {
   name: string | null
   status: string
   created_at: string
+  profile_id?: number | null
+  profile_name?: string | null
   compare_summary?: TaskCompareSummary | null
 }
 
-export async function createTask(args?: { initialSteps?: string[]; name?: string }): Promise<CreateTaskResponse> {
+export async function createTask(args?: {
+  initialSteps?: string[]
+  name?: string
+  profileId?: number | null
+}): Promise<CreateTaskResponse> {
   const { data } = await api.post<CreateTaskResponse>('/api/tasks', {
     initial_steps: args?.initialSteps ?? undefined,
     name: args?.name ?? undefined,
+    profile_id: args?.profileId ?? undefined,
   })
   return data
 }

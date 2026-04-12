@@ -342,7 +342,7 @@ function ReviewTaskPage() {
         任务 #{task.id} 校审
       </Title>
       <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginLG }}>
-        对按章生成结果进行审查，识别废标项、幻觉与套路等；审查完成后可按章查看校审意见，勾选采纳项后触发该章重生成。
+        对按章生成结果进行审查；审查完成后可按章查看校审意见，勾选采纳项后触发该章重生成。
       </Text>
 
       {!chaptersCompleted && (

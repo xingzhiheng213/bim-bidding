@@ -50,14 +50,6 @@ const PROJECT_INFO_LABELS: Record<string, string> = {
   construction_unit: '建设单位',
 }
 
-/** 校审维度说明（任务页展示「审什么」；后续可扩展为从配置/接口读取并合并自定义项） */
-const REVIEW_DIMENSIONS: { key: string; label: string; desc: string; tagColor: 'error' | 'warning' | 'default' | 'processing' }[] = [
-  { key: 'feibiao', label: '废标项', desc: '与招标废标条款、实质性响应不符或遗漏必须项', tagColor: 'error' },
-  { key: 'huanjue', label: '幻觉', desc: '无依据的承诺、编造的数据或条款', tagColor: 'warning' },
-  { key: 'taolu', label: '套路', desc: '空话、AI惯用模板化表述、缺乏针对本项目的具体内容', tagColor: 'default' },
-  { key: 'jianyi', label: '建议', desc: '可优化表述、补充依据、增强针对性', tagColor: 'processing' },
-]
-
 function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -159,15 +151,29 @@ function TaskDetailPage() {
     analyzeStep &&
     (analyzeStep.status === 'pending' || analyzeStep.status === 'failed')
   const analyzeRunning = analyzeStep?.status === 'running'
-  let paramsOutput: { project_info?: Record<string, unknown>; bim_requirements?: string[]; risk_points?: string[] } | null = null
+  let paramsOutput: {
+    project_info?: Record<string, unknown>
+    key_requirements?: string[]
+    bim_requirements?: string[]
+    risk_points?: string[]
+  } | null = null
   if (paramsStep?.status === 'completed' && paramsStep.output_snapshot) {
     try {
-      const out = JSON.parse(paramsStep.output_snapshot) as { project_info?: Record<string, unknown>; bim_requirements?: string[]; risk_points?: string[] }
+      const out = JSON.parse(paramsStep.output_snapshot) as {
+        project_info?: Record<string, unknown>
+        key_requirements?: string[]
+        bim_requirements?: string[]
+        risk_points?: string[]
+      }
       paramsOutput = out
     } catch {
       paramsOutput = null
     }
   }
+  const paramsKeyRequirements =
+    paramsOutput != null
+      ? (paramsOutput.key_requirements ?? paramsOutput.bim_requirements ?? [])
+      : []
   const showParamsTrigger =
     analyzeStep?.status === 'completed' &&
     (!paramsStep || paramsStep.status === 'pending' || paramsStep.status === 'failed')
@@ -604,7 +610,7 @@ function TaskDetailPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `BIM标书_任务${id}.docx`
+      a.download = `标书_任务${id}.docx`
       a.click()
       URL.revokeObjectURL(url)
       message.success('下载成功')
@@ -654,6 +660,13 @@ function TaskDetailPage() {
               <span style={{ marginLeft: 24 }} />
               <Text strong>创建时间：</Text>
               <Text>{new Date(data.created_at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}</Text>
+              <span style={{ marginLeft: 24 }} />
+              <Text strong>当前语义配置：</Text>
+              <Text>
+                {data.profile_id != null
+                  ? data.profile_name || `配置 #${data.profile_id}`
+                  : 'BIM技术标（内置）'}
+              </Text>
             </div>
 
             {stepsItems.length > 0 && (
@@ -703,7 +716,11 @@ function TaskDetailPage() {
                 <Card
                   key={stepKey}
                   id={`step-${stepKey}`}
-                  title={STEP_TITLES[stepKey]}
+                  title={
+                    stepKey === 'review'
+                      ? `${STEP_TITLES[stepKey]}（按固定维度产出结构化校审意见）`
+                      : STEP_TITLES[stepKey]
+                  }
                   extra={<Tag color={stepStatusDisplay[status].tagColor}>{getStepStatusLabel(status)}</Tag>}
                   style={cardStyle}
                 >
@@ -826,7 +843,17 @@ function TaskDetailPage() {
                           style={{ marginTop: designTokens.marginSM }}
                           items={[
                             { key: 'project_info', label: '项目信息', children: <Typography.Paragraph style={{ marginBottom: 0 }}>{Object.keys(paramsOutput.project_info || {}).length === 0 ? '（无）' : Object.entries(paramsOutput.project_info || {}).map(([k, v]) => <span key={k} style={{ display: 'block', marginBottom: 4 }}><Text strong>{PROJECT_INFO_LABELS[k] ?? k}：</Text>{typeof v === 'object' ? JSON.stringify(v) : String(v)}</span>)}</Typography.Paragraph> },
-                            { key: 'bim_requirements', label: 'BIM 要求', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{(paramsOutput.bim_requirements || []).length === 0 ? '（无）' : (paramsOutput.bim_requirements || []).map((item, i) => <li key={i}>{item}</li>)}</ul> },
+                            {
+                              key: 'key_requirements',
+                              label: '响应要点',
+                              children: (
+                                <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
+                                  {paramsKeyRequirements.length === 0
+                                    ? '（无）'
+                                    : paramsKeyRequirements.map((item, i) => <li key={i}>{item}</li>)}
+                                </ul>
+                              ),
+                            },
                             { key: 'risk_points', label: '风险点', children: <ul style={{ marginBottom: 0, paddingLeft: 20 }}>{(paramsOutput.risk_points || []).length === 0 ? '（无）' : (paramsOutput.risk_points || []).map((item, i) => <li key={i}>{item}</li>)}</ul> },
                           ]}
                         />
@@ -1003,42 +1030,20 @@ function TaskDetailPage() {
                                 ? '审查失败'
                                 : '可进入校审模块开始审查'}
                       </Text>
-                      <div style={{ marginBottom: designTokens.marginMD }}>
-                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>
-                          校审将从以下维度检查各章：
+                      <div
+                        style={{
+                          marginBottom: designTokens.marginMD,
+                          padding: designTokens.paddingSM,
+                          background: 'rgba(0,0,0,0.02)',
+                          borderRadius: designTokens.borderRadius,
+                        }}
+                      >
+                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+                          示例（人设说明，实际以后端提示词与配置为准）：
                         </Text>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {REVIEW_DIMENSIONS.map((d) => (
-                            <div
-                              key={d.key}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'flex-start',
-                                gap: 8,
-                                padding: '6px 10px',
-                                background: 'rgba(0,0,0,0.02)',
-                                borderRadius: 6,
-                              }}
-                            >
-                              <Tag
-                                color={d.tagColor}
-                                style={{
-                                  marginRight: 0,
-                                  flexShrink: 0,
-                                  fontSize: 12,
-                                  minWidth: 56,
-                                  textAlign: 'center',
-                                  display: 'inline-block',
-                                }}
-                              >
-                                {d.label}
-                              </Tag>
-                              <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 0, flex: 1 }}>
-                                {d.desc}
-                              </Text>
-                            </div>
-                          ))}
-                        </div>
+                        <Text style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 0 }}>
+                          你是BIM技术标校审专家，对单章正文进行质量与合规校审。
+                        </Text>
                       </div>
                       {step?.status === 'failed' && step?.error_message && (
                         <Alert type="error" message="审查失败" description={step.error_message} showIcon style={{ marginTop: designTokens.marginSM }} />

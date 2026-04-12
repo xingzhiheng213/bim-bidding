@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     framework_llm_model: str = Field(default="deepseek-chat", validation_alias="FRAMEWORK_LLM_MODEL")
     chapter_llm_provider: str = Field(default="deepseek", validation_alias="CHAPTER_LLM_PROVIDER")
     chapter_llm_model: str = Field(default="deepseek-chat", validation_alias="CHAPTER_LLM_MODEL")
+    prompt_profile_gen_llm_provider: str = Field(
+        default="deepseek", validation_alias="PROMPT_PROFILE_GEN_LLM_PROVIDER"
+    )
+    prompt_profile_gen_llm_model: str = Field(
+        default="deepseek-chat", validation_alias="PROMPT_PROFILE_GEN_LLM_MODEL"
+    )
 
     chapter_outline_analyze_max_len: int = Field(
         default=8000, validation_alias="CHAPTER_OUTLINE_ANALYZE_MAX_LEN"
@@ -51,6 +57,11 @@ class Settings(BaseSettings):
     chapter_content_analyze_max_len: int = Field(
         default=6000, validation_alias="CHAPTER_CONTENT_ANALYZE_MAX_LEN"
     )
+
+    framework_kb_fallback_query: str = Field(
+        default="标书框架", validation_alias="FRAMEWORK_KB_FALLBACK_QUERY"
+    )
+    framework_kb_query_max_len: int = Field(default=500, validation_alias="FRAMEWORK_KB_QUERY_MAX_LEN")
 
     ragflow_api_url: str = ""
     ragflow_api_key: str = ""
@@ -129,8 +140,12 @@ FRAMEWORK_LLM_PROVIDER: str = settings.framework_llm_provider
 FRAMEWORK_LLM_MODEL: str = settings.framework_llm_model
 CHAPTER_LLM_PROVIDER: str = settings.chapter_llm_provider
 CHAPTER_LLM_MODEL: str = settings.chapter_llm_model
+PROMPT_PROFILE_GEN_LLM_PROVIDER: str = settings.prompt_profile_gen_llm_provider
+PROMPT_PROFILE_GEN_LLM_MODEL: str = settings.prompt_profile_gen_llm_model
 CHAPTER_OUTLINE_ANALYZE_MAX_LEN: int = settings.chapter_outline_analyze_max_len
 CHAPTER_CONTENT_ANALYZE_MAX_LEN: int = settings.chapter_content_analyze_max_len
+FRAMEWORK_KB_FALLBACK_QUERY: str = settings.framework_kb_fallback_query
+FRAMEWORK_KB_QUERY_MAX_LEN: int = settings.framework_kb_query_max_len
 RAGFLOW_API_URL: str = settings.ragflow_api_url
 RAGFLOW_API_KEY: str = settings.ragflow_api_key
 RAGFLOW_DATASET_IDS_RAW: str = settings.ragflow_dataset_ids_raw

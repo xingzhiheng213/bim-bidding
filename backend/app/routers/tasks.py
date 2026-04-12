@@ -13,12 +13,12 @@ import shutil
 from datetime import datetime
 
 from celery_app import app as celery_app
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app import config
 from app.database import get_db
-from app.models import Task, TaskStep
+from app.models import PromptProfile, Task, TaskStep
 from app.schemas.compare import ChapterCompareMetaItem, CompareMetaResponse, FrameworkCompareMeta
 from app.schemas.task import (
     DEFAULT_INITIAL_STEPS,
@@ -57,12 +57,28 @@ def create_task(
         task.name = body.name.strip()[:255]
     else:
         task.name = f"未命名任务-{task.id}-{datetime.now().strftime('%m%d%H%M')}"
+    if body and body.profile_id is not None:
+        prof = db.query(PromptProfile).filter(PromptProfile.id == body.profile_id).first()
+        if not prof:
+            raise HTTPException(status_code=404, detail="Prompt 配置不存在")
+        task.profile_id = body.profile_id
     for step_key in steps_to_create:
         step = TaskStep(task_id=task.id, step_key=step_key, status="pending")
         db.add(step)
     db.commit()
     db.refresh(task)
-    return CreateTaskResponse(id=task.id, name=task.name, status=task.status, created_at=task.created_at)
+    profile_name: str | None = None
+    if task.profile_id is not None:
+        p = db.query(PromptProfile).filter(PromptProfile.id == task.profile_id).first()
+        profile_name = p.name if p else None
+    return CreateTaskResponse(
+        id=task.id,
+        name=task.name,
+        status=task.status,
+        created_at=task.created_at,
+        profile_id=task.profile_id,
+        profile_name=profile_name,
+    )
 
 
 @router.get("/{task_id}", response_model=TaskDetailResponse)
@@ -70,6 +86,10 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
     """Get task by id with steps (ordered by step id)."""
     task = require_task(task_id, db)
     steps = db.query(TaskStep).filter(TaskStep.task_id == task_id).order_by(TaskStep.id).all()
+    profile_name: str | None = None
+    if task.profile_id is not None:
+        p = db.query(PromptProfile).filter(PromptProfile.id == task.profile_id).first()
+        profile_name = p.name if p else None
     return TaskDetailResponse(
         id=task.id,
         user_id=task.user_id,
@@ -77,6 +97,8 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
         status=task.status,
         created_at=task.created_at,
         updated_at=task.updated_at,
+        profile_id=task.profile_id,
+        profile_name=profile_name,
         steps=[TaskStepSchema.model_validate(s) for s in steps],
     )
 
@@ -164,6 +186,12 @@ def list_tasks(db: Session = Depends(get_db)):
 
     task_ids = [t.id for t in tasks]
 
+    profile_ids = [t.profile_id for t in tasks if t.profile_id is not None]
+    profile_names: dict[int, str] = {}
+    if profile_ids:
+        for p in db.query(PromptProfile).filter(PromptProfile.id.in_(profile_ids)).all():
+            profile_names[p.id] = p.name
+
     framework_steps = (
         db.query(TaskStep)
         .filter(TaskStep.task_id.in_(task_ids), TaskStep.step_key == "framework")
@@ -196,6 +224,8 @@ def list_tasks(db: Session = Depends(get_db)):
                 name=t.name,
                 status=t.status,
                 created_at=t.created_at,
+                profile_id=t.profile_id,
+                profile_name=profile_names.get(t.profile_id) if t.profile_id else None,
                 compare_summary=compare_summary,
             )
         )

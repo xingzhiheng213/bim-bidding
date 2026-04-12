@@ -1,7 +1,7 @@
 """Tests for review prompts: build_review_messages and parse_review_output."""
 import unittest
 
-from app.prompts import build_review_messages, parse_review_output
+from app.prompts import REVIEW_OUTPUT_FORMAT_SPEC, REVIEW_SYSTEM, build_review_messages, parse_review_output
 
 
 class TestBuildReviewMessages(unittest.TestCase):
@@ -10,13 +10,13 @@ class TestBuildReviewMessages(unittest.TestCase):
         chapter_full_name = "第1章 项目理解与分析"
         chapter_content = "本章为示例正文。"
         analyze_text = "招标要求摘要。"
-        params_risk_bim_scoring = "废标点：xxx；BIM要求：yyy"
+        params_review_context = "废标点：xxx；响应要点：yyy"
         kb_context = "知识库片段。"
         messages = build_review_messages(
             chapter_full_name,
             chapter_content,
             analyze_text,
-            params_risk_bim_scoring,
+            params_review_context,
             kb_context,
         )
         self.assertEqual(len(messages), 2)
@@ -25,7 +25,7 @@ class TestBuildReviewMessages(unittest.TestCase):
         self.assertIn(chapter_full_name, user_content)
         self.assertIn(chapter_content, user_content)
         self.assertIn(analyze_text, user_content)
-        self.assertIn(params_risk_bim_scoring, user_content)
+        self.assertIn(params_review_context, user_content)
         self.assertIn(kb_context, user_content)
 
     def test_structure(self):
@@ -42,6 +42,21 @@ class TestBuildReviewMessages(unittest.TestCase):
         self.assertTrue(messages[0]["content"])
         self.assertEqual(messages[1]["role"], "user")
         self.assertTrue(messages[1]["content"])
+
+    def test_default_system_matches_review_system_constant(self):
+        messages = build_review_messages("章", "正文", "分析", "参数", "知识库")
+        self.assertEqual(messages[0]["content"], REVIEW_SYSTEM)
+
+    def test_custom_review_system_appends_output_format_spec(self):
+        custom = "自定义校审人设"
+        merged = {"review_system": custom}
+        messages = build_review_messages(
+            "章", "正文", "分析", "参数", "知识库", semantic_overrides=merged
+        )
+        sys_c = messages[0]["content"]
+        self.assertTrue(sys_c.startswith(custom))
+        self.assertIn(REVIEW_OUTPUT_FORMAT_SPEC, sys_c)
+        self.assertIn(custom + "\n\n" + REVIEW_OUTPUT_FORMAT_SPEC, sys_c)
 
 
 class TestParseReviewOutput(unittest.TestCase):

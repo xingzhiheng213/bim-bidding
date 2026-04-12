@@ -486,7 +486,7 @@ export default function OneClickTaskDetailPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `BIM标书-任务${id}.docx`
+      a.download = `标书_任务${id}.docx`
       a.click()
       URL.revokeObjectURL(url)
       message.success('下载已开始')
@@ -539,6 +539,16 @@ export default function OneClickTaskDetailPage() {
       <Text type="secondary" style={{ display: 'block', marginBottom: designTokens.marginLG }}>
         上传招标文件后自动完成解析、分析、框架与正文生成，仅需在生成框架后确认一次即可。
       </Text>
+      {taskData && (
+        <div style={{ marginBottom: designTokens.marginMD }}>
+          <Text strong>当前语义配置：</Text>
+          <Text>
+            {taskData.profile_id != null
+              ? taskData.profile_name || `配置 #${taskData.profile_id}`
+              : 'BIM技术标（内置）'}
+          </Text>
+        </div>
+      )}
 
       {phase === 'idle' && (
         <div style={{ marginBottom: designTokens.marginLG, maxWidth: 520 }}>
