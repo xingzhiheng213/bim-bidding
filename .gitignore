@@ -1,18 +1,30 @@
-# Python
-backend/.venv/
+# Python（venv 常见名为 venv 或 .venv，勿只写死一种）
+venv/
+.venv/
+env/
+ENV/
 backend/__pycache__/
+__pycache__/
 *.pyc
 *.pyo
 .Python
 *.egg-info/
 .eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # 敏感配置（不要提交 API Key、数据库密码等）
 .env
 backend/.env
+frontend/.env.development
+frontend/.env.production
 
 # 上传文件（按需：若不想把用户上传的 PDF 进仓库就保留下面这行）
 backend/data/uploads/
+
+# 脚本/演示生成的输出（勿提交）
+backend/test_table_output.docx
 
 # Node
 frontend/node_modules/
