@@ -7,10 +7,10 @@ import logging
 
 from app import config
 from app.database import SessionLocal
-from app.params_compat import extract_requirements_list
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
 from app.models import Task, TaskStep
+from app.params_compat import extract_requirements_list
 from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_framework_messages, parse_framework_text
 from celery_app import app
@@ -149,6 +149,8 @@ def run_framework(task_id: int) -> None:
             model=model,
             messages=messages,
             temperature=temperature,
+            prompt_step="framework_points" if extra_points else "framework",
+            task_id=task_id,
         )
 
         chapters = parse_framework_text(content)

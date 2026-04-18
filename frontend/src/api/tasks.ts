@@ -66,8 +66,19 @@ export async function getTask(id: string): Promise<TaskDetail> {
   return data
 }
 
-export async function getTasks(): Promise<TaskSummary[]> {
-  const { data } = await api.get<TaskSummary[]>('/api/tasks')
+/**
+ * @param profileFilter - `null`: 仅内置默认（未绑定 Profile）的任务；`number`: 仅该 PromptProfile；`undefined`: 不传参，返回全部（兼容旧调用）
+ */
+export async function getTasks(profileFilter?: number | null): Promise<TaskSummary[]> {
+  const params: Record<string, string> = {}
+  if (profileFilter === null) {
+    params.profile_id = 'default'
+  } else if (profileFilter !== undefined && typeof profileFilter === 'number') {
+    params.profile_id = String(profileFilter)
+  }
+  const { data } = await api.get<TaskSummary[]>('/api/tasks', {
+    params: Object.keys(params).length > 0 ? params : undefined,
+  })
   return data
 }
 

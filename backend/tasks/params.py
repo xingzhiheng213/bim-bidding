@@ -4,9 +4,9 @@ import logging
 import re
 
 from app.database import SessionLocal
-from app.params_compat import REQUIREMENTS_JSON_KEY, coalesce_requirements_from_llm_raw
 from app.llm import call_llm
 from app.models import Task, TaskStep
+from app.params_compat import REQUIREMENTS_JSON_KEY, coalesce_requirements_from_llm_raw
 from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_params_messages
 from celery_app import app
@@ -149,6 +149,8 @@ def run_params(task_id: int) -> None:
             model=model,
             messages=messages,
             temperature=PARAMS_TEMPERATURE,
+            prompt_step="params",
+            task_id=task_id,
         )
 
         json_str = _extract_json_from_response(content)

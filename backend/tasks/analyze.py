@@ -86,6 +86,8 @@ def run_analyze(task_id: int) -> None:
             model=model,
             messages=messages,
             temperature=ANALYZE_TEMPERATURE,
+            prompt_step="analyze",
+            task_id=task_id,
         )
 
         analyze_step = _get_or_create_analyze_step(db, task_id)

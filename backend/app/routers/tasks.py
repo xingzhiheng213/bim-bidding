@@ -13,7 +13,7 @@ import shutil
 from datetime import datetime
 
 from celery_app import app as celery_app
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app import config
@@ -172,15 +172,35 @@ def cancel_task(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[TaskSummary])
-def list_tasks(db: Session = Depends(get_db)):
+def list_tasks(
+    db: Session = Depends(get_db),
+    profile_id: str | None = Query(
+        None,
+        description="Filter: PromptProfile id (integer string), or 'default' for tasks with no profile. Omit for all tasks.",
+    ),
+):
     """List tasks (newest first).
 
+    Optional ``profile_id`` query: when set to a numeric id, only tasks bound to that
+    PromptProfile are returned; when ``default``, only tasks with ``profile_id IS NULL``.
+
     Uses 3 queries total regardless of task count (avoids 1+2N pattern):
-      1. SELECT all tasks
+      1. SELECT tasks (optionally filtered)
       2. SELECT framework steps WHERE task_id IN (...)
       3. SELECT chapters steps WHERE task_id IN (...)
     """
-    tasks = db.query(Task).order_by(Task.created_at.desc()).all()
+    q = db.query(Task)
+    if profile_id is not None and profile_id.strip() != "":
+        key = profile_id.strip().lower()
+        if key in ("default", "null", "none"):
+            q = q.filter(Task.profile_id.is_(None))
+        else:
+            try:
+                pid = int(profile_id.strip(), 10)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail="profile_id 须为整数或 default") from e
+            q = q.filter(Task.profile_id == pid)
+    tasks = q.order_by(Task.created_at.desc()).all()
     if not tasks:
         return []
 

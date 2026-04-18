@@ -1,4 +1,8 @@
-"""Built-in engineering disciplines for PromptProfile (single source of truth)."""
+"""Built-in engineering disciplines for PromptProfile (single source of truth).
+
+Includes **BIM** as a first-class discipline (product origin: BIM 技术标)，与建筑/机电等并列；
+智能生成与主/非主专业隔离逻辑均从 DISCIPLINES 推导，勿在其它处硬编码专业表。
+"""
 
 from __future__ import annotations
 
@@ -8,6 +12,7 @@ DEFAULT_DISCIPLINE: Final[str] = "建筑"
 
 DISCIPLINES: Final[tuple[str, ...]] = (
     "建筑",
+    "BIM",
     "结构",
     "给排水",
     "暖通",

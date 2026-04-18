@@ -18,6 +18,7 @@ def test_prompt_profiles_disciplines_list():
         assert r.status_code == 200
         items = r.json()["items"]
         assert "建筑" in items
+        assert "BIM" in items
         assert "暖通" in items
     finally:
         app.dependency_overrides.pop(verify_api_key, None)

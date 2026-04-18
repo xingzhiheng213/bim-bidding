@@ -4,6 +4,7 @@ import { Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useQuery } from '@tanstack/react-query'
 import { getTasks, type TaskSummary } from '../api/tasks'
+import { useSelectedProfile } from '../context/SelectedProfileContext'
 import { designTokens } from '../theme/tokens'
 import '../App.css'
 
@@ -11,11 +12,12 @@ const { Title, Text } = Typography
 
 function ComparePage() {
   const navigate = useNavigate()
+  const { selectedProfileId } = useSelectedProfile()
   const [taskId, setTaskId] = useState<number | null>(null)
 
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: getTasks,
+    queryKey: ['tasks', selectedProfileId],
+    queryFn: () => getTasks(selectedProfileId),
   })
 
   const taskColumns: ColumnsType<TaskSummary> = [

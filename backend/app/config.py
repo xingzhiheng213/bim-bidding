@@ -69,10 +69,38 @@ class Settings(BaseSettings):
 
     knowledge_base_type_env: str = Field(default="", validation_alias="KNOWLEDGE_BASE_TYPE")
 
+    # 设为 1/true 时，call_llm 在发送请求前按 prompt_step 记录契约层文案（见 app.contract_prompt_log）
+    log_contract_prompts: bool = Field(default=False, validation_alias="LOG_CONTRACT_PROMPTS")
+    log_contract_max_chars: int = Field(default=200_000, validation_alias="LOG_CONTRACT_MAX_CHARS")
+    # 相对 backend/ 或绝对路径；留空则仅输出到控制台 logger，不写文件
+    log_contract_prompts_file: str = Field(
+        default="data/logs/contract_prompts.log",
+        validation_alias="LOG_CONTRACT_PROMPTS_FILE",
+    )
+
     upload_dir: Path = Field(default=Path("."))
     export_dir: Path = Field(default=Path("."))
     max_upload_size_bytes: int = 0
     knowledge_base_type: str = "none"
+
+    @field_validator("log_contract_prompts", mode="before")
+    @classmethod
+    def _coerce_log_contract_prompts(cls, v: object) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.strip().lower() in ("1", "true", "yes", "on")
+        return bool(v)
+
+    @field_validator("log_contract_max_chars", mode="after")
+    @classmethod
+    def _non_negative_log_contract_max_chars(cls, v: int) -> int:
+        return max(0, v)
+
+    @field_validator("log_contract_prompts_file", mode="after")
+    @classmethod
+    def _strip_log_contract_prompts_file(cls, v: str) -> str:
+        return v.strip() if isinstance(v, str) else ""
 
     @field_validator("admin_api_key", "settings_secret_key", mode="after")
     @classmethod
@@ -150,6 +178,9 @@ RAGFLOW_API_URL: str = settings.ragflow_api_url
 RAGFLOW_API_KEY: str = settings.ragflow_api_key
 RAGFLOW_DATASET_IDS_RAW: str = settings.ragflow_dataset_ids_raw
 KNOWLEDGE_BASE_TYPE: str = settings.knowledge_base_type
+LOG_CONTRACT_PROMPTS: bool = settings.log_contract_prompts
+LOG_CONTRACT_MAX_CHARS: int = settings.log_contract_max_chars
+LOG_CONTRACT_PROMPTS_FILE: str = settings.log_contract_prompts_file
 
 
 def get_ragflow_dataset_ids() -> list[str]:

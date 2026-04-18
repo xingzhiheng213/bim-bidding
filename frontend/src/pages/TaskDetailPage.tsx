@@ -716,11 +716,7 @@ function TaskDetailPage() {
                 <Card
                   key={stepKey}
                   id={`step-${stepKey}`}
-                  title={
-                    stepKey === 'review'
-                      ? `${STEP_TITLES[stepKey]}（按固定维度产出结构化校审意见）`
-                      : STEP_TITLES[stepKey]
-                  }
+                  title={STEP_TITLES[stepKey]}
                   extra={<Tag color={stepStatusDisplay[status].tagColor}>{getStepStatusLabel(status)}</Tag>}
                   style={cardStyle}
                 >
@@ -1030,21 +1026,6 @@ function TaskDetailPage() {
                                 ? '审查失败'
                                 : '可进入校审模块开始审查'}
                       </Text>
-                      <div
-                        style={{
-                          marginBottom: designTokens.marginMD,
-                          padding: designTokens.paddingSM,
-                          background: 'rgba(0,0,0,0.02)',
-                          borderRadius: designTokens.borderRadius,
-                        }}
-                      >
-                        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-                          示例（人设说明，实际以后端提示词与配置为准）：
-                        </Text>
-                        <Text style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 0 }}>
-                          你是BIM技术标校审专家，对单章正文进行质量与合规校审。
-                        </Text>
-                      </div>
                       {step?.status === 'failed' && step?.error_message && (
                         <Alert type="error" message="审查失败" description={step.error_message} showIcon style={{ marginTop: designTokens.marginSM }} />
                       )}

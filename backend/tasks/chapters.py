@@ -7,10 +7,10 @@ import json
 import logging
 
 from app.database import SessionLocal
-from app.params_compat import extract_requirements_list
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
 from app.models import Task, TaskStep
+from app.params_compat import extract_requirements_list
 from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import (
     build_chapter_content_messages,
@@ -107,6 +107,8 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
             model=model,
             messages=messages,
             temperature=CHAPTER_REGENERATE_TEMPERATURE,
+            prompt_step="chapter_regenerate",
+            task_id=task_id,
         )
     else:
         analyze_step = (
@@ -153,6 +155,8 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
                 model=model,
                 messages=outline_messages,
                 temperature=CHAPTER_OUTLINE_TEMPERATURE,
+                prompt_step="chapter_outline",
+                task_id=task_id,
             )
         context_chunks = kb_search(query=full_name, top_k=KB_TOP_K)
         context_text = "\n\n".join(context_chunks) if context_chunks else ""
@@ -171,6 +175,8 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
             model=model,
             messages=content_messages,
             temperature=CHAPTER_CONTENT_TEMPERATURE,
+            prompt_step="chapter_content",
+            task_id=task_id,
         )
 
     chapters_step = _get_or_create_chapters_step(db, task_id)
@@ -332,6 +338,8 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
                         model=model,
                         messages=outline_messages,
                         temperature=CHAPTER_OUTLINE_TEMPERATURE,
+                        prompt_step="chapter_outline",
+                        task_id=task_id,
                     )
                 except Exception as e:
                     logger.exception("run_chapters: task_id=%s chapter %s outline failed", task_id, num)
@@ -357,6 +365,8 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
                     model=model,
                     messages=content_messages,
                     temperature=CHAPTER_CONTENT_TEMPERATURE,
+                    prompt_step="chapter_content",
+                    task_id=task_id,
                 )
             except Exception as e:
                 logger.exception("run_chapters: task_id=%s chapter %s content failed", task_id, num)

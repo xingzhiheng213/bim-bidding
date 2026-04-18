@@ -2,6 +2,7 @@
 import httpx
 
 from app import config
+from app.contract_prompt_log import log_contract_prompts
 
 
 def _default_base_url(provider: str) -> str:
@@ -17,6 +18,8 @@ def call_llm(
     *,
     api_key: str | None = None,
     base_url: str | None = None,
+    prompt_step: str | None = None,
+    task_id: int | None = None,
 ) -> str:
     """Call LLM via OpenAI-compatible chat completions; return content or raise.
 
@@ -27,6 +30,8 @@ def call_llm(
         temperature: 0..1.
         api_key: If None, taken from config.get_llm_api_key(provider).
         base_url: If None, taken from config by provider (no trailing slash).
+        prompt_step: Optional pipeline step name for LOG_CONTRACT_PROMPTS logging (see contract_prompt_log).
+        task_id: Optional task id included in contract prompt logs.
 
     Returns:
         choices[0].message.content as str.
@@ -36,6 +41,8 @@ def call_llm(
         httpx.HTTPStatusError: Non-2xx response.
         KeyError/IndexError: Unexpected response shape (re-raised or wrapped).
     """
+    log_contract_prompts(prompt_step=prompt_step, messages=messages, task_id=task_id)
+
     key = api_key or config.get_llm_api_key(provider)
     if not key:
         raise ValueError(f"请在设置中配置 {provider} API Key")

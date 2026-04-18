@@ -30,8 +30,8 @@ function OneClickPage() {
     data: tasksData,
     isLoading: tasksLoading,
   } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: getTasks,
+    queryKey: ['tasks', selectedProfileId],
+    queryFn: () => getTasks(selectedProfileId),
   })
   const createMutation = useMutation({
     mutationFn: (name: string) =>

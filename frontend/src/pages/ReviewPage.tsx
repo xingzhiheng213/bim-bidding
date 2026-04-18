@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button, Empty, Spin, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { getTask, getTasks, type TaskDetail, type TaskSummary } from '../api/tasks'
+import { useSelectedProfile } from '../context/SelectedProfileContext'
 import { designTokens } from '../theme/tokens'
 import { getStepStatusLabel, stepStatusDisplay, type StepStatus } from '../theme/stepStatus'
 import '../App.css'
@@ -21,10 +22,11 @@ function getReviewStatusDisplay(status: string): { tagColor: 'default' | 'primar
 
 function ReviewPage() {
   const navigate = useNavigate()
+  const { selectedProfileId } = useSelectedProfile()
 
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: getTasks,
+    queryKey: ['tasks', selectedProfileId],
+    queryFn: () => getTasks(selectedProfileId),
   })
 
   const taskIds = tasksData?.map((t) => String(t.id)) ?? []

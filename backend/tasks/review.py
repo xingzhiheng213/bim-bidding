@@ -8,18 +8,18 @@ import logging
 
 from app import config
 from app.database import SessionLocal
+from app.knowledge_base import search as kb_search
+from app.llm import call_llm
+from app.models import Task, TaskStep
 from app.params_compat import extract_requirements_list
+from app.prompt_merge import load_merged_semantic_for_task
+from app.prompts import build_review_messages, parse_review_output
 from app.review_prompt_assembly import (
     REVIEW_PARAMS_SECTION_KEY_REQUIREMENTS,
     REVIEW_PARAMS_SECTION_PROJECT,
     REVIEW_PARAMS_SECTION_RISK,
     REVIEW_PARAMS_SECTION_SCORING,
 )
-from app.knowledge_base import search as kb_search
-from app.llm import call_llm
-from app.models import Task, TaskStep
-from app.prompt_merge import load_merged_semantic_for_task
-from app.prompts import build_review_messages, parse_review_output
 from celery_app import app
 from sqlalchemy.orm import Session
 
@@ -191,6 +191,8 @@ def run_review(task_id: int) -> None:
                     model=model,
                     messages=messages,
                     temperature=REVIEW_TEMPERATURE,
+                    prompt_step="review",
+                    task_id=task_id,
                 )
                 items = parse_review_output(llm_text)
                 results_by_chapter[str(num)] = items
@@ -339,6 +341,8 @@ def run_review_chapter(task_id: int, chapter_number: int) -> None:
                 model=model,
                 messages=messages,
                 temperature=REVIEW_TEMPERATURE,
+                prompt_step="review",
+                task_id=task_id,
             )
             items = parse_review_output(llm_text)
         except Exception as e:
