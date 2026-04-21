@@ -17,6 +17,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app import config
+from app.auth import Principal, get_principal
 from app.database import get_db
 from app.models import PromptProfile, Task, TaskStep
 from app.schemas.compare import ChapterCompareMetaItem, CompareMetaResponse, FrameworkCompareMeta
@@ -29,6 +30,7 @@ from app.schemas.task import (
     TaskStepSchema,
     TaskSummary,
 )
+from sqlalchemy import or_
 from app.services.step_service import (
     compute_compare_meta_for_task,
     compute_compare_meta_from_steps,
@@ -44,13 +46,14 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 def create_task(
     body: CreateTaskRequest | None = Body(None),
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Create a task and optionally initial steps (all pending)."""
     steps_to_create = (
         body.initial_steps if body and body.initial_steps
         else DEFAULT_INITIAL_STEPS
     )
-    task = Task(status="pending")
+    task = Task(status="pending", tenant_id=principal.tenant_id, user_id=principal.user_id)
     db.add(task)
     db.flush()
     if body and body.name and body.name.strip():
@@ -58,7 +61,20 @@ def create_task(
     else:
         task.name = f"未命名任务-{task.id}-{datetime.now().strftime('%m%d%H%M')}"
     if body and body.profile_id is not None:
-        prof = db.query(PromptProfile).filter(PromptProfile.id == body.profile_id).first()
+        prof = (
+            db.query(PromptProfile)
+            .filter(
+                PromptProfile.id == body.profile_id,
+                or_(
+                    PromptProfile.is_builtin.is_(True),
+                    (
+                        (PromptProfile.tenant_id == principal.tenant_id)
+                        & (PromptProfile.user_id == principal.user_id)
+                    ),
+                ),
+            )
+            .first()
+        )
         if not prof:
             raise HTTPException(status_code=404, detail="Prompt 配置不存在")
         task.profile_id = body.profile_id
@@ -69,7 +85,20 @@ def create_task(
     db.refresh(task)
     profile_name: str | None = None
     if task.profile_id is not None:
-        p = db.query(PromptProfile).filter(PromptProfile.id == task.profile_id).first()
+        p = (
+            db.query(PromptProfile)
+            .filter(
+                PromptProfile.id == task.profile_id,
+                or_(
+                    PromptProfile.is_builtin.is_(True),
+                    (
+                        (PromptProfile.tenant_id == principal.tenant_id)
+                        & (PromptProfile.user_id == principal.user_id)
+                    ),
+                ),
+            )
+            .first()
+        )
         profile_name = p.name if p else None
     return CreateTaskResponse(
         id=task.id,
@@ -82,13 +111,30 @@ def create_task(
 
 
 @router.get("/{task_id}", response_model=TaskDetailResponse)
-def get_task(task_id: int, db: Session = Depends(get_db)):
+def get_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Get task by id with steps (ordered by step id)."""
-    task = require_task(task_id, db)
+    task = require_task(task_id, db, principal)
     steps = db.query(TaskStep).filter(TaskStep.task_id == task_id).order_by(TaskStep.id).all()
     profile_name: str | None = None
     if task.profile_id is not None:
-        p = db.query(PromptProfile).filter(PromptProfile.id == task.profile_id).first()
+        p = (
+            db.query(PromptProfile)
+            .filter(
+                PromptProfile.id == task.profile_id,
+                or_(
+                    PromptProfile.is_builtin.is_(True),
+                    (
+                        (PromptProfile.tenant_id == principal.tenant_id)
+                        & (PromptProfile.user_id == principal.user_id)
+                    ),
+                ),
+            )
+            .first()
+        )
         profile_name = p.name if p else None
     return TaskDetailResponse(
         id=task.id,
@@ -104,9 +150,13 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{task_id}/compare-meta", response_model=CompareMetaResponse)
-def get_task_compare_meta(task_id: int, db: Session = Depends(get_db)):
+def get_task_compare_meta(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Return compare metadata for a task: which items have before/after versions."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
     meta = compute_compare_meta_for_task(task_id, db)
     framework = FrameworkCompareMeta(has_diff=meta["framework_has_diff"])
     chapters_items: list[ChapterCompareMetaItem] = []
@@ -122,25 +172,35 @@ def get_task_compare_meta(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{task_id}", status_code=204)
-def delete_task(task_id: int, db: Session = Depends(get_db)):
+def delete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Delete a task and its steps. Returns 204 No Content.
 
     DB records are removed first; uploaded files are cleaned up after a
     successful commit so that a failed commit never leaves orphaned DB rows.
     """
-    task = require_task(task_id, db)
+    task = require_task(task_id, db, principal)
     db.query(TaskStep).filter(TaskStep.task_id == task_id).delete()
     db.delete(task)
     db.commit()
-    task_dir = config.UPLOAD_DIR / f"task_{task_id}"
-    shutil.rmtree(task_dir, ignore_errors=True)
+    legacy_task_dir = config.UPLOAD_DIR / f"task_{task_id}"
+    scoped_task_dir = config.UPLOAD_DIR / f"tenant_{principal.tenant_id}" / f"user_{principal.user_id}" / f"task_{task_id}"
+    shutil.rmtree(legacy_task_dir, ignore_errors=True)
+    shutil.rmtree(scoped_task_dir, ignore_errors=True)
     return None
 
 
 @router.post("/{task_id}/cancel", status_code=200)
-def cancel_task(task_id: int, db: Session = Depends(get_db)):
+def cancel_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Revoke the currently running Celery step for this task (e.g. one-click cancel)."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
     running = (
         db.query(TaskStep)
         .filter(TaskStep.task_id == task_id, TaskStep.status == "running")
@@ -174,6 +234,7 @@ def cancel_task(task_id: int, db: Session = Depends(get_db)):
 @router.get("", response_model=list[TaskSummary])
 def list_tasks(
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
     profile_id: str | None = Query(
         None,
         description="Filter: PromptProfile id (integer string), or 'default' for tasks with no profile. Omit for all tasks.",
@@ -189,7 +250,10 @@ def list_tasks(
       2. SELECT framework steps WHERE task_id IN (...)
       3. SELECT chapters steps WHERE task_id IN (...)
     """
-    q = db.query(Task)
+    q = db.query(Task).filter(
+        Task.tenant_id == principal.tenant_id,
+        Task.user_id == principal.user_id,
+    )
     if profile_id is not None and profile_id.strip() != "":
         key = profile_id.strip().lower()
         if key in ("default", "null", "none"):
@@ -199,6 +263,22 @@ def list_tasks(
                 pid = int(profile_id.strip(), 10)
             except ValueError as e:
                 raise HTTPException(status_code=400, detail="profile_id 须为整数或 default") from e
+            p = (
+                db.query(PromptProfile)
+                .filter(
+                    PromptProfile.id == pid,
+                    or_(
+                        PromptProfile.is_builtin.is_(True),
+                        (
+                            (PromptProfile.tenant_id == principal.tenant_id)
+                            & (PromptProfile.user_id == principal.user_id)
+                        ),
+                    ),
+                )
+                .first()
+            )
+            if not p:
+                raise HTTPException(status_code=404, detail="Prompt 配置不存在")
             q = q.filter(Task.profile_id == pid)
     tasks = q.order_by(Task.created_at.desc()).all()
     if not tasks:
@@ -209,7 +289,20 @@ def list_tasks(
     profile_ids = [t.profile_id for t in tasks if t.profile_id is not None]
     profile_names: dict[int, str] = {}
     if profile_ids:
-        for p in db.query(PromptProfile).filter(PromptProfile.id.in_(profile_ids)).all():
+        for p in (
+            db.query(PromptProfile)
+            .filter(
+                PromptProfile.id.in_(profile_ids),
+                or_(
+                    PromptProfile.is_builtin.is_(True),
+                    (
+                        (PromptProfile.tenant_id == principal.tenant_id)
+                        & (PromptProfile.user_id == principal.user_id)
+                    ),
+                ),
+            )
+            .all()
+        ):
             profile_names[p.id] = p.name
 
     framework_steps = (

@@ -2,9 +2,11 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.auth import Principal, get_principal
 from app.database import get_db
 from app.disciplines import list_disciplines, validate_discipline
 from app.models import PromptProfile
@@ -62,30 +64,69 @@ def post_generate_semantic(body: GenerateSemanticRequest):
         ) from e
 
 
-def _require_mutable(profile: PromptProfile) -> None:
+def _require_mutable(profile: PromptProfile, principal: Principal) -> None:
     if profile.is_builtin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="内置配置不可修改或删除",
         )
+    if profile.tenant_id != principal.tenant_id or profile.user_id != principal.user_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="配置不存在")
 
 
 @router.get("", response_model=list[PromptProfileSummary])
-def list_prompt_profiles(db: Session = Depends(get_db)):
-    rows = db.query(PromptProfile).order_by(PromptProfile.updated_at.desc()).all()
+def list_prompt_profiles(
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
+    rows = (
+        db.query(PromptProfile)
+        .filter(
+            or_(
+                PromptProfile.is_builtin.is_(True),
+                (
+                    (PromptProfile.tenant_id == principal.tenant_id)
+                    & (PromptProfile.user_id == principal.user_id)
+                ),
+            )
+        )
+        .order_by(PromptProfile.updated_at.desc())
+        .all()
+    )
     return [PromptProfileSummary.model_validate(r) for r in rows]
 
 
 @router.get("/{profile_id}", response_model=PromptProfileDetail)
-def get_prompt_profile(profile_id: int, db: Session = Depends(get_db)):
-    row = db.query(PromptProfile).filter(PromptProfile.id == profile_id).first()
+def get_prompt_profile(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
+    row = (
+        db.query(PromptProfile)
+        .filter(
+            PromptProfile.id == profile_id,
+            or_(
+                PromptProfile.is_builtin.is_(True),
+                (
+                    (PromptProfile.tenant_id == principal.tenant_id)
+                    & (PromptProfile.user_id == principal.user_id)
+                ),
+            ),
+        )
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="配置不存在")
     return PromptProfileDetail.model_validate(row)
 
 
 @router.post("", response_model=PromptProfileDetail, status_code=201)
-def create_prompt_profile(body: PromptProfileCreate, db: Session = Depends(get_db)):
+def create_prompt_profile(
+    body: PromptProfileCreate,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     try:
         overrides = validate_semantic_overrides_for_save(body.semantic_overrides)
         disc = validate_discipline(body.discipline)
@@ -97,6 +138,8 @@ def create_prompt_profile(body: PromptProfileCreate, db: Session = Depends(get_d
         discipline=disc,
         is_builtin=False,
         semantic_overrides=overrides,
+        tenant_id=principal.tenant_id,
+        user_id=principal.user_id,
     )
     db.add(row)
     try:
@@ -114,11 +157,25 @@ def update_prompt_profile(
     profile_id: int,
     body: PromptProfileUpdate,
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
-    row = db.query(PromptProfile).filter(PromptProfile.id == profile_id).first()
+    row = (
+        db.query(PromptProfile)
+        .filter(
+            PromptProfile.id == profile_id,
+            or_(
+                PromptProfile.is_builtin.is_(True),
+                (
+                    (PromptProfile.tenant_id == principal.tenant_id)
+                    & (PromptProfile.user_id == principal.user_id)
+                ),
+            ),
+        )
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="配置不存在")
-    _require_mutable(row)
+    _require_mutable(row, principal)
     patch = body.model_dump(exclude_unset=True)
     if "name" in patch:
         row.name = str(patch["name"]).strip()[:255]
@@ -146,11 +203,28 @@ def update_prompt_profile(
 
 
 @router.delete("/{profile_id}", status_code=204)
-def delete_prompt_profile(profile_id: int, db: Session = Depends(get_db)):
-    row = db.query(PromptProfile).filter(PromptProfile.id == profile_id).first()
+def delete_prompt_profile(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
+    row = (
+        db.query(PromptProfile)
+        .filter(
+            PromptProfile.id == profile_id,
+            or_(
+                PromptProfile.is_builtin.is_(True),
+                (
+                    (PromptProfile.tenant_id == principal.tenant_id)
+                    & (PromptProfile.user_id == principal.user_id)
+                ),
+            ),
+        )
+        .first()
+    )
     if not row:
         raise HTTPException(status_code=404, detail="配置不存在")
-    _require_mutable(row)
+    _require_mutable(row, principal)
     db.delete(row)
     db.commit()
     return None

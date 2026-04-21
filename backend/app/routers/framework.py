@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from tasks.framework import run_framework
 
+from app.auth import Principal, get_principal
 from app.database import get_db
 from app.diff_compare import compute_diff
 from app.params_compat import params_snapshot_has_requirements_list
@@ -23,9 +24,13 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
 @router.post("/{task_id}/steps/framework/run", status_code=202)
-def run_framework_step(task_id: int, db: Session = Depends(get_db)):
+def run_framework_step(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Enqueue framework generation. Requires params step completed."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     params_step = require_step_completed(task_id, "params", db, "请先完成参数提取")
     try:
@@ -38,14 +43,18 @@ def run_framework_step(task_id: int, db: Session = Depends(get_db)):
     step = get_or_create_step(task_id, "framework", db)
     if step.status == "running":
         return {"message": "框架生成已在进行中", "step_key": "framework"}
-    dispatch_celery_step(step, run_framework, db, task_id)
+    dispatch_celery_step(step, run_framework, db, principal, task_id)
     return {"message": "框架已入队", "step_key": "framework"}
 
 
 @router.post("/{task_id}/steps/framework/regenerate", status_code=202)
-def regenerate_framework_step(task_id: int, db: Session = Depends(get_db)):
+def regenerate_framework_step(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Re-enqueue framework generation when status is waiting_user."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     framework_step = (
         db.query(TaskStep)
@@ -59,7 +68,7 @@ def regenerate_framework_step(task_id: int, db: Session = Depends(get_db)):
     if framework_step.status != "waiting_user":
         raise HTTPException(status_code=400, detail="仅当框架等待审核时可重新生成")
 
-    dispatch_celery_step(framework_step, run_framework, db, task_id)
+    dispatch_celery_step(framework_step, run_framework, db, principal, task_id)
     return {"message": "框架已重新入队", "step_key": "framework"}
 
 
@@ -68,9 +77,10 @@ def save_framework_points(
     task_id: int,
     body: AcceptFrameworkRequest,
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Save user points for the framework (status remains waiting_user)."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     framework_step = (
         db.query(TaskStep)
@@ -101,9 +111,10 @@ def accept_framework_step(
     task_id: int,
     body: AcceptFrameworkRequest,
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Accept framework and transition step to completed. Only valid when status is waiting_user."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     framework_step = (
         db.query(TaskStep)
@@ -133,9 +144,13 @@ def accept_framework_step(
 
 
 @router.get("/{task_id}/steps/framework/diff", response_model=DiffResponse)
-def get_framework_diff(task_id: int, db: Session = Depends(get_db)):
+def get_framework_diff(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Return last framework regenerate: original vs modified text and structured diff."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
     framework_step = (
         db.query(TaskStep)
         .filter(TaskStep.task_id == task_id, TaskStep.step_key == "framework")

@@ -23,9 +23,26 @@ def _search_none(_query: str, _top_k: int) -> list[str]:
     return []
 
 
-def _search_ragflow(query: str, top_k: int = 10) -> list[str]:
+def _resolve_scope_from_task(task_id: int | None) -> tuple[str | None, str | None]:
+    if task_id is None:
+        return None, None
+    from app.database import SessionLocal
+    from app.models import Task
+
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            return None, None
+        return task.tenant_id, task.user_id
+    finally:
+        db.close()
+
+
+def _search_ragflow(query: str, top_k: int = 10, *, task_id: int | None = None) -> list[str]:
     """RAGFlow adapter: POST /api/v1/retrieval, parse response to list of text chunks. Config from DB then env."""
-    effective = get_ragflow_effective()
+    tenant_id, user_id = _resolve_scope_from_task(task_id)
+    effective = get_ragflow_effective(tenant_id=tenant_id, user_id=user_id)
     if not effective:
         logger.info("RAGFlow not configured: missing RAGFLOW_API_URL, RAGFLOW_API_KEY or RAGFLOW_DATASET_IDS")
         return []
@@ -67,17 +84,18 @@ def _search_ragflow(query: str, top_k: int = 10) -> list[str]:
     return chunks
 
 
-def get_search_fn() -> SearchFn:
+def get_search_fn(task_id: int | None = None) -> SearchFn:
     """Return the search implementation based on effective kb_type (DB then env)."""
-    kb_type = get_kb_config().get("kb_type") or config.KNOWLEDGE_BASE_TYPE
+    tenant_id, user_id = _resolve_scope_from_task(task_id)
+    kb_type = get_kb_config(tenant_id=tenant_id, user_id=user_id).get("kb_type") or config.KNOWLEDGE_BASE_TYPE
     if kb_type == "ragflow":
-        return _search_ragflow
+        return lambda q, k: _search_ragflow(q, k, task_id=task_id)
     return _search_none
 
 
-def search(query: str, top_k: int = 10) -> list[str]:
+def search(query: str, top_k: int = 10, *, task_id: int | None = None) -> list[str]:
     """Search knowledge base; returns list of text chunks. Never raises; returns [] on misconfig or error."""
-    return get_search_fn()(query, top_k)
+    return get_search_fn(task_id=task_id)(query, top_k)
 
 
 def test_ragflow_connection(base_url: str, api_key: str) -> tuple[bool, str]:

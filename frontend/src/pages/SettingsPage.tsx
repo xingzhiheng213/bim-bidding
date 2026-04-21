@@ -12,6 +12,7 @@ import {
   postSettingsKnowledgeBaseTest,
   postSettingsLlm,
 } from '../api/settings'
+import { getIdentityScopeKey } from '../api/client'
 import { designTokens } from '../theme/tokens'
 import '../App.css'
 
@@ -43,6 +44,7 @@ const LINE_SPACING_OPTIONS = [
 
 function SettingsPage() {
   const queryClient = useQueryClient()
+  const identityScope = getIdentityScopeKey()
   const [inputByProvider, setInputByProvider] = useState<Record<string, string>>({})
   const [baseUrlByProvider, setBaseUrlByProvider] = useState<Record<string, string>>({})
   const [exportFormat, setExportFormat] = useState<ExportFormatConfig>(DEFAULT_EXPORT_FORMAT)
@@ -52,17 +54,17 @@ function SettingsPage() {
   const [ragflowDatasetIds, setRagflowDatasetIds] = useState('')
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['settings', 'llm'],
+    queryKey: ['settings', identityScope, 'llm'],
     queryFn: getSettingsLlm,
   })
 
   const { data: exportFormatData, isLoading: exportFormatLoading } = useQuery({
-    queryKey: ['settings', 'export-format'],
+    queryKey: ['settings', identityScope, 'export-format'],
     queryFn: getSettingsExportFormat,
   })
 
   const { data: exportFormatFonts, isLoading: exportFormatFontsLoading } = useQuery({
-    queryKey: ['settings', 'export-format-fonts'],
+    queryKey: ['settings', identityScope, 'export-format-fonts'],
     queryFn: getSettingsExportFormatFonts,
   })
 
@@ -72,7 +74,7 @@ function SettingsPage() {
     isError: kbError,
     error: kbErr,
   } = useQuery({
-    queryKey: ['settings', 'knowledge-base'],
+    queryKey: ['settings', identityScope, 'knowledge-base'],
     queryFn: getSettingsKnowledgeBase,
   })
 
@@ -98,7 +100,7 @@ function SettingsPage() {
     onSuccess: (res) => {
       message.success('导出格式已保存')
       setExportFormat((prev) => ({ ...prev, ...res }))
-      queryClient.invalidateQueries({ queryKey: ['settings', 'export-format'] })
+      queryClient.invalidateQueries({ queryKey: ['settings', identityScope, 'export-format'] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -127,7 +129,7 @@ function SettingsPage() {
       message.success(didClear ? '已取消配置' : '已保存')
       setInputByProvider((prev) => ({ ...prev, [provider]: '' }))
       setBaseUrlByProvider((prev) => ({ ...prev, [provider]: '' }))
-      queryClient.invalidateQueries({ queryKey: ['settings', 'llm'] })
+      queryClient.invalidateQueries({ queryKey: ['settings', identityScope, 'llm'] })
     },
     onError: (e: unknown) => {
       const msg =
@@ -152,7 +154,7 @@ function SettingsPage() {
     onSuccess: () => {
       message.success('知识库配置已保存')
       setRagflowApiKey('')
-      queryClient.invalidateQueries({ queryKey: ['settings', 'knowledge-base'] })
+      queryClient.invalidateQueries({ queryKey: ['settings', identityScope, 'knowledge-base'] })
     },
     onError: (e: unknown) => {
       const detail =

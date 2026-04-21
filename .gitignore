@@ -38,6 +38,8 @@ frontend/dist/
 # 开发/阶段文档（不提交到仓库）
 docs/
 各阶段指导/
+/USER_ISOLATION_API_HANDOFF.md
+/USER_ISOLATION_CHECKLIST.md
 PROJECT_ASSESSMENT.md
 *分阶段*.md
 README-backend.md

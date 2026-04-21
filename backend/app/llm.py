@@ -43,10 +43,11 @@ def call_llm(
     """
     log_contract_prompts(prompt_step=prompt_step, messages=messages, task_id=task_id)
 
-    key = api_key or config.get_llm_api_key(provider)
+    key = api_key or config.get_llm_api_key(provider, task_id=task_id)
     if not key:
         raise ValueError(f"请在设置中配置 {provider} API Key")
-    url_base = (base_url or _default_base_url(provider)).rstrip("/")
+    resolved_base = base_url or config.get_llm_base_url(provider, task_id=task_id)
+    url_base = resolved_base.rstrip("/")
     url = f"{url_base}/chat/completions"
 
     payload = {

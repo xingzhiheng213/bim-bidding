@@ -9,7 +9,7 @@ import logging
 from app.database import SessionLocal
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
-from app.models import Task, TaskStep
+from app.models import TaskStep
 from app.params_compat import extract_requirements_list
 from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import (
@@ -20,6 +20,7 @@ from app.prompts import (
 )
 from celery_app import app
 from sqlalchemy.orm import Session
+from tasks.scope_guard import validate_task_scope
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +159,7 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
                 prompt_step="chapter_outline",
                 task_id=task_id,
             )
-        context_chunks = kb_search(query=full_name, top_k=KB_TOP_K)
+        context_chunks = kb_search(query=full_name, top_k=KB_TOP_K, task_id=task_id)
         context_text = "\n\n".join(context_chunks) if context_chunks else ""
         content_messages = build_chapter_content_messages(
             chapter_full_name=full_name,
@@ -204,7 +205,12 @@ def _regenerate_one_chapter_impl(db: Session, task_id: int, chapter_number: int)
 
 
 @app.task
-def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None:
+def run_chapters(
+    task_id: int,
+    chapter_numbers: list[int] | None = None,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> None:
     """Generate chapter content for selected framework chapters.
 
     Reads framework step (completed) for chapters list; optionally filters by chapter_numbers.
@@ -213,9 +219,16 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="run_chapters",
+            on_failed=lambda msg: _set_chapters_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("run_chapters: task_id=%s not found", task_id)
             return
 
         framework_step = (
@@ -346,7 +359,7 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
                     _set_chapters_failed(db, task_id, f"第{num}章小节大纲生成失败: {str(e)[:500]}")
                     return
 
-            context_chunks = kb_search(query=full_name, top_k=KB_TOP_K)
+            context_chunks = kb_search(query=full_name, top_k=KB_TOP_K, task_id=task_id)
             context_text = "\n\n".join(context_chunks) if context_chunks else ""
 
             try:
@@ -411,15 +424,27 @@ def run_chapters(task_id: int, chapter_numbers: list[int] | None = None) -> None
 
 
 @app.task
-def regenerate_chapter(task_id: int, chapter_number: int) -> None:
+def regenerate_chapter(
+    task_id: int,
+    chapter_number: int,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> None:
     """Re-generate a single chapter. Reads current content + chapter_points; only updates that chapter.
     Uses _regenerate_one_chapter_impl for the actual work.
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="regenerate_chapter",
+            on_failed=lambda msg: _set_chapters_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("regenerate_chapter: task_id=%s not found", task_id)
             return
 
         chapters_step = _get_or_create_chapters_step(db, task_id)
@@ -450,16 +475,27 @@ def regenerate_chapter(task_id: int, chapter_number: int) -> None:
 
 
 @app.task
-def regenerate_all_chapters_from_review(task_id: int) -> None:
+def regenerate_all_chapters_from_review(
+    task_id: int,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> None:
     """Regenerate all chapters sequentially using review output as chapter_points.
     For each chapter (in order): set chapter_points from review items, then call _regenerate_one_chapter_impl.
     Does not run chapters in parallel to respect API limits.
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="regenerate_all_chapters_from_review",
+            on_failed=lambda msg: _set_chapters_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("regenerate_all_chapters_from_review: task_id=%s not found", task_id)
             return
 
         chapters_step = (

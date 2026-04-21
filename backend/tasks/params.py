@@ -5,12 +5,13 @@ import re
 
 from app.database import SessionLocal
 from app.llm import call_llm
-from app.models import Task, TaskStep
+from app.models import TaskStep
 from app.params_compat import REQUIREMENTS_JSON_KEY, coalesce_requirements_from_llm_raw
 from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_params_messages
 from celery_app import app
 from sqlalchemy.orm import Session
+from tasks.scope_guard import validate_task_scope
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ def _normalize_params(raw: dict) -> dict:
 
 
 @app.task
-def run_params(task_id: int) -> None:
+def run_params(task_id: int, tenant_id: str | None = None, user_id: str | None = None) -> None:
     """Extract params from analyze step text and write to params step.
 
     Reads analyze step output_snapshot["text"], calls LLM with params prompt,
@@ -110,9 +111,16 @@ def run_params(task_id: int) -> None:
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="run_params",
+            on_failed=lambda msg: _set_params_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("run_params: task_id=%s not found", task_id)
             return
 
         analyze_step = (

@@ -6,12 +6,15 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { getIdentityScopeKey } from '../api/client'
 
-const STORAGE_KEY = 'bim_selected_profile_id'
+function getStorageKey(): string {
+  return `bim_selected_profile_id::${getIdentityScopeKey()}`
+}
 
 function readStoredProfileId(): number | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(getStorageKey())
     if (raw == null || raw === '') return null
     const v = JSON.parse(raw) as unknown
     if (v === null) return null
@@ -24,7 +27,7 @@ function readStoredProfileId(): number | null {
 
 function writeStoredProfileId(id: number | null): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(id))
+    localStorage.setItem(getStorageKey(), JSON.stringify(id))
   } catch {
     // ignore quota / private mode
   }

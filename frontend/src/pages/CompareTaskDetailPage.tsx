@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Alert, Button, Collapse, Input, message, Space, Spin, Typography } from 'antd'
 import { useQuery } from '@tanstack/react-query'
+import { getIdentityScopeKey } from '../api/client'
 import {
   getFrameworkDiff,
   getChaptersDiff,
@@ -21,6 +22,7 @@ const { TextArea } = Input
 const contentMaxWidth = 960
 
 function CompareTaskDetailPage() {
+  const identityScope = getIdentityScopeKey()
   const params = useParams()
   const taskIdParam = params.id as string | undefined
 
@@ -38,7 +40,7 @@ function CompareTaskDetailPage() {
     isLoading: loadingTaskDetail,
     error: taskDetailError,
   } = useQuery<TaskDetail | undefined>({
-    queryKey: ['task', taskIdParam],
+    queryKey: ['task', identityScope, taskIdParam],
     queryFn: async () => (taskIdParam ? getTask(taskIdParam) : undefined),
     enabled: !!taskIdParam,
   })
@@ -48,7 +50,7 @@ function CompareTaskDetailPage() {
     isLoading: loadingCompareMeta,
     error: compareMetaError,
   } = useQuery<CompareMetaResponse | undefined>({
-    queryKey: ['task-compare-meta', taskIdParam],
+    queryKey: ['task-compare-meta', identityScope, taskIdParam],
     queryFn: async () => (taskIdParam ? getTaskCompareMeta(taskIdParam) : undefined),
     enabled: !!taskIdParam,
   })

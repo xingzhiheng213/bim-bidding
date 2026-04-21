@@ -9,12 +9,13 @@ from app import config
 from app.database import SessionLocal
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
-from app.models import Task, TaskStep
+from app.models import TaskStep
 from app.params_compat import extract_requirements_list
 from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_framework_messages, parse_framework_text
 from celery_app import app
 from sqlalchemy.orm import Session
+from tasks.scope_guard import validate_task_scope
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def _set_framework_failed(db: Session, task_id: int, error_message: str) -> None
 
 
 @app.task
-def run_framework(task_id: int) -> None:
+def run_framework(task_id: int, tenant_id: str | None = None, user_id: str | None = None) -> None:
     """Generate framework from analyze + params + KB; write chapters to framework step.
 
     Reads analyze step text, params step (key_requirements etc.), calls KB search,
@@ -56,9 +57,16 @@ def run_framework(task_id: int) -> None:
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="run_framework",
+            on_failed=lambda msg: _set_framework_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("run_framework: task_id=%s not found", task_id)
             return
 
         params_step = (
@@ -109,7 +117,7 @@ def run_framework(task_id: int) -> None:
             if analyze_text
             else config.FRAMEWORK_KB_FALLBACK_QUERY
         )
-        chunks = kb_search(query=query, top_k=10)
+        chunks = kb_search(query=query, top_k=10, task_id=task_id)
         context_text = "\n\n".join(chunks) if chunks else ""
 
         # Read existing framework step output for extra_points and current chapters (for "user has ideas" mode)

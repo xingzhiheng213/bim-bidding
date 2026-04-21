@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { Alert, Button, Checkbox, Collapse, message, Modal, Select, Spin, Tag, Typography } from 'antd'
 import { getChaptersDiff } from '../api/compare'
 import { getTask, runReview, acceptReview, regenerateAllChaptersFromReview, type TaskDetail, type TaskStep } from '../api/tasks'
+import { getIdentityScopeKey } from '../api/client'
 import { DiffView } from '../components/DiffView'
 import { designTokens } from '../theme/tokens'
 import { getStepStatusLabel, type StepStatus } from '../theme/stepStatus'
@@ -56,6 +57,7 @@ function getTagColorForType(type: string): 'default' | 'processing' | 'success' 
 function ReviewTaskPage() {
   const { taskId } = useParams<{ taskId: string }>()
   const queryClient = useQueryClient()
+  const identityScope = getIdentityScopeKey()
 
   const [acceptModalOpen, setAcceptModalOpen] = useState(false)
   const [acceptModalChapterNumber, setAcceptModalChapterNumber] = useState<number | null>(null)
@@ -87,7 +89,7 @@ function ReviewTaskPage() {
     isLoading: taskLoading,
     isError: taskError,
   } = useQuery({
-    queryKey: ['task', taskId],
+    queryKey: ['task', identityScope, taskId],
     queryFn: () => getTask(taskId!),
     enabled: !!taskId,
     refetchInterval: (query) => {
@@ -106,7 +108,7 @@ function ReviewTaskPage() {
       runReview(tid, chapterNumber),
     onSuccess: async (_, { taskId: tid, chapterNumber }) => {
       message.success(chapterNumber != null ? '单章审查已入队，请稍候…' : '审查已入队，请稍候…')
-      await queryClient.invalidateQueries({ queryKey: ['task', tid] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, tid] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -131,7 +133,7 @@ function ReviewTaskPage() {
       setLastAcceptedChapterNumber(chapterNumber)
       setAcceptSubmittedAt(Date.now())
       setAcceptedChapterNumbersInSession((prev) => (prev.includes(chapterNumber) ? prev : [...prev, chapterNumber]))
-      await queryClient.invalidateQueries({ queryKey: ['task', tid] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, tid] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -149,7 +151,7 @@ function ReviewTaskPage() {
     onSuccess: async (_, tid) => {
       message.success('已入队，将按章顺序重生成全部章节，页面将自动更新。')
       setRegenerateAllSubmittedAt(Date.now())
-      await queryClient.invalidateQueries({ queryKey: ['task', tid] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, tid] })
     },
     onError: (e: unknown) => {
       const detail =

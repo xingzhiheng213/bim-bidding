@@ -3,9 +3,10 @@
  * 侧栏（Sider）+ 主内容区（Content）；子页面通过 Outlet 渲染在 Content 内。
  */
 import { useQuery } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useLocation, Outlet } from 'react-router-dom'
-import { Button, Divider, Layout, Menu, Select, Typography } from 'antd'
+import { Button, Divider, Input, Layout, Menu, Select, Space, Typography } from 'antd'
+import { getIdentityScope, getIdentityScopeKey, setIdentityScope } from '../api/client'
 import { listPromptProfiles } from '../api/promptProfiles'
 import {
   profileIdToSelectValue,
@@ -38,10 +39,14 @@ const contentStyle: React.CSSProperties = {
 export default function AppLayout() {
   const navigate = useNavigate()
   const location = useLocation()
+  const currentIdentity = getIdentityScope()
+  const identityScope = getIdentityScopeKey()
   const { selectedProfileId, setSelectedProfileId } = useSelectedProfile()
+  const [tenantInput, setTenantInput] = useState(currentIdentity.tenantId)
+  const [userInput, setUserInput] = useState(currentIdentity.userId)
 
   const { data: profiles = [], isFetched: profilesFetched } = useQuery({
-    queryKey: ['prompt-profiles'],
+    queryKey: ['prompt-profiles', identityScope],
     queryFn: listPromptProfiles,
   })
 
@@ -111,6 +116,53 @@ export default function AppLayout() {
             >
               工程设计标书生成系统
             </Title>
+            <Space.Compact style={{ width: '100%', marginTop: designTokens.marginSM }}>
+              <Input
+                size="small"
+                value={tenantInput}
+                onChange={(e) => setTenantInput(e.target.value)}
+                placeholder="tenant"
+              />
+              <Input
+                size="small"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                placeholder="user"
+              />
+              <Button
+                size="small"
+                onClick={() => {
+                  setIdentityScope({ tenantId: tenantInput, userId: userInput })
+                  window.location.reload()
+                }}
+              >
+                切换
+              </Button>
+            </Space.Compact>
+            <Space size={4} style={{ marginTop: 6, width: '100%' }}>
+              <Button
+                size="small"
+                type="link"
+                style={{ paddingInline: 0 }}
+                onClick={() => {
+                  setIdentityScope({ tenantId: currentIdentity.tenantId, userId: 'user-a' })
+                  window.location.reload()
+                }}
+              >
+                user-a
+              </Button>
+              <Button
+                size="small"
+                type="link"
+                style={{ paddingInline: 0 }}
+                onClick={() => {
+                  setIdentityScope({ tenantId: currentIdentity.tenantId, userId: 'user-b' })
+                  window.location.reload()
+                }}
+              >
+                user-b
+              </Button>
+            </Space>
             <Select
               size="small"
               style={{ width: '100%', marginTop: designTokens.marginSM }}

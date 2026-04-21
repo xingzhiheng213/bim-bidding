@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     )
 
     admin_api_key: str = ""
+    auth_mode: str = Field(default="hybrid", validation_alias="AUTH_MODE")
+    auth_default_tenant_id: str = Field(default="default", validation_alias="AUTH_DEFAULT_TENANT_ID")
+    auth_default_user_id: str = Field(default="dev-user", validation_alias="AUTH_DEFAULT_USER_ID")
     # Fernet 32-byte URL-safe base64；与 backend/.env 中 SETTINGS_SECRET_KEY 对应（SEC-02）
     settings_secret_key: str = Field(default="", validation_alias="SETTINGS_SECRET_KEY")
     redis_url: str = "redis://localhost:6379/0"
@@ -107,6 +110,19 @@ class Settings(BaseSettings):
     def _strip_secrets_and_admin(cls, v: str) -> str:
         return v.strip()
 
+    @field_validator("auth_mode", mode="after")
+    @classmethod
+    def _normalize_auth_mode(cls, v: str) -> str:
+        mode = v.strip().lower()
+        if mode not in ("mock", "header", "jwt", "hybrid"):
+            return "hybrid"
+        return mode
+
+    @field_validator("auth_default_tenant_id", "auth_default_user_id", mode="after")
+    @classmethod
+    def _normalize_auth_defaults(cls, v: str) -> str:
+        return v.strip() or "default"
+
     @field_validator("deepseek_base_url", mode="after")
     @classmethod
     def _normalize_deepseek_base_url(cls, v: str) -> str:
@@ -148,6 +164,9 @@ settings = Settings()
 
 # Backward compatibility: existing code uses `from app import config` and config.UPPER_NAME
 ADMIN_API_KEY: str = settings.admin_api_key
+AUTH_MODE: str = settings.auth_mode
+AUTH_DEFAULT_TENANT_ID: str = settings.auth_default_tenant_id
+AUTH_DEFAULT_USER_ID: str = settings.auth_default_user_id
 SETTINGS_SECRET_KEY: str = settings.settings_secret_key
 REDIS_URL: str = settings.redis_url
 DATABASE_URL: str = settings.database_url
@@ -191,11 +210,28 @@ def get_ragflow_dataset_ids() -> list[str]:
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 
-def get_llm_api_key(provider: str) -> str | None:
+def _get_task_scope(task_id: int | None) -> tuple[str | None, str | None]:
+    if task_id is None:
+        return None, None
+    from app.database import SessionLocal
+    from app.models import Task
+
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if not task:
+            return None, None
+        return task.tenant_id, task.user_id
+    finally:
+        db.close()
+
+
+def get_llm_api_key(provider: str, task_id: int | None = None) -> str | None:
     """Return API key for provider (deepseek); from DB first, then env; None if not set."""
     from app.settings_store import get_api_key_from_db
 
-    key = get_api_key_from_db(provider)
+    tenant_id, user_id = _get_task_scope(task_id)
+    key = get_api_key_from_db(provider, tenant_id=tenant_id, user_id=user_id)
     if key:
         return key
     if provider == "deepseek":
@@ -203,11 +239,12 @@ def get_llm_api_key(provider: str) -> str | None:
     return None
 
 
-def get_llm_base_url(provider: str) -> str:
+def get_llm_base_url(provider: str, task_id: int | None = None) -> str:
     """Return base URL for provider (no trailing slash); from DB first, then env."""
     from app.settings_store import get_base_url_from_db
 
-    url = get_base_url_from_db(provider)
+    tenant_id, user_id = _get_task_scope(task_id)
+    url = get_base_url_from_db(provider, tenant_id=tenant_id, user_id=user_id)
     if url:
         return url.rstrip("/")
     if provider == "deepseek":

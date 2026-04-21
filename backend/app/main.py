@@ -66,6 +66,8 @@ _CORS_ALLOW_HEADERS = [
     "Content-Type",
     "Authorization",
     "X-API-Key",
+    "X-Debug-User-Id",
+    "X-Debug-Tenant-Id",
     "Accept",
     "Accept-Language",
 ]
@@ -82,6 +84,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup():
     """Test DB connection and create tables if not exist."""
+    logger.info("Auth mode: %s", config.AUTH_MODE)
     if not (config.ADMIN_API_KEY or "").strip():
         logger.warning(
             "ADMIN_API_KEY is not set: HTTP API authentication is disabled. "
@@ -163,6 +166,55 @@ async def startup():
         else:
             logger.warning("Could not add profile_id to tasks: %s", e)
 
+    # Add tenant/user scope to tasks
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE tasks ADD COLUMN tenant_id VARCHAR(64)"))
+            conn.commit()
+        logger.info("Added column tenant_id to tasks")
+    except Exception as e:
+        err = str(e).lower()
+        if "duplicate" in err or "already exists" in err or "exists" in err:
+            logger.debug("Column tenant_id already exists on tasks")
+        else:
+            logger.warning("Could not add tenant_id to tasks: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "UPDATE tasks SET tenant_id = :tenant_id WHERE tenant_id IS NULL OR TRIM(tenant_id) = ''"
+                ),
+                {"tenant_id": config.AUTH_DEFAULT_TENANT_ID},
+            )
+            conn.commit()
+        logger.info("Backfilled tasks.tenant_id where null")
+    except Exception as e:
+        logger.warning("Could not backfill tasks.tenant_id: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "UPDATE tasks SET user_id = :user_id WHERE user_id IS NULL OR TRIM(user_id) = ''"
+                ),
+                {"user_id": config.AUTH_DEFAULT_USER_ID},
+            )
+            conn.commit()
+        logger.info("Backfilled tasks.user_id where null")
+    except Exception as e:
+        logger.warning("Could not backfill tasks.user_id: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_tasks_tenant_user_created_at "
+                    "ON tasks (tenant_id, user_id, created_at)"
+                )
+            )
+            conn.commit()
+        logger.info("Index ix_tasks_tenant_user_created_at ensured")
+    except Exception as e:
+        logger.warning("Could not create ix_tasks_tenant_user_created_at: %s", e)
+
     # Add discipline to prompt_profiles (semantic profile specialty)
     try:
         with engine.connect() as conn:
@@ -187,6 +239,210 @@ async def startup():
         logger.info("Backfilled prompt_profiles.discipline where null")
     except Exception as e:
         logger.warning("Could not backfill prompt_profiles.discipline: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE prompt_profiles ADD COLUMN tenant_id VARCHAR(64)"))
+            conn.commit()
+        logger.info("Added column tenant_id to prompt_profiles")
+    except Exception as e:
+        err = str(e).lower()
+        if "duplicate" in err or "already exists" in err or "exists" in err:
+            logger.debug("Column tenant_id already exists on prompt_profiles")
+        else:
+            logger.warning("Could not add tenant_id to prompt_profiles: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "UPDATE prompt_profiles SET tenant_id = :tenant_id "
+                    "WHERE is_builtin = FALSE AND (tenant_id IS NULL OR TRIM(tenant_id) = '')"
+                ),
+                {"tenant_id": config.AUTH_DEFAULT_TENANT_ID},
+            )
+            conn.commit()
+        logger.info("Backfilled prompt_profiles.tenant_id where null")
+    except Exception as e:
+        logger.warning("Could not backfill prompt_profiles.tenant_id: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "UPDATE prompt_profiles SET user_id = :user_id "
+                    "WHERE is_builtin = FALSE AND (user_id IS NULL OR TRIM(user_id) = '')"
+                ),
+                {"user_id": config.AUTH_DEFAULT_USER_ID},
+            )
+            conn.commit()
+        logger.info("Backfilled prompt_profiles.user_id where null")
+    except Exception as e:
+        logger.warning("Could not backfill prompt_profiles.user_id: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_prompt_profiles_tenant_user_updated_at "
+                    "ON prompt_profiles (tenant_id, user_id, updated_at)"
+                )
+            )
+            conn.commit()
+        logger.info("Index ix_prompt_profiles_tenant_user_updated_at ensured")
+    except Exception as e:
+        logger.warning("Could not create ix_prompt_profiles_tenant_user_updated_at: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "ALTER TABLE prompt_profiles "
+                    "DROP CONSTRAINT IF EXISTS prompt_profiles_slug_key"
+                )
+            )
+            conn.execute(text("DROP INDEX IF EXISTS prompt_profiles_slug_key"))
+            conn.commit()
+        logger.info("Dropped legacy global unique constraint/index on prompt_profiles.slug")
+    except Exception as e:
+        logger.debug("Could not drop legacy prompt_profiles.slug unique constraint/index: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_prompt_profiles_tenant_user_slug "
+                    "ON prompt_profiles (tenant_id, user_id, slug) "
+                    "WHERE slug IS NOT NULL"
+                )
+            )
+            conn.commit()
+        logger.info("Unique index uq_prompt_profiles_tenant_user_slug ensured")
+    except Exception as e:
+        logger.warning("Could not ensure uq_prompt_profiles_tenant_user_slug: %s", e)
+
+    # Scope migration: llm_settings
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE llm_settings ADD COLUMN tenant_id VARCHAR(64)"))
+            conn.commit()
+        logger.info("Added column tenant_id to llm_settings")
+    except Exception as e:
+        err = str(e).lower()
+        if "duplicate" in err or "already exists" in err or "exists" in err:
+            logger.debug("Column tenant_id already exists on llm_settings")
+        else:
+            logger.warning("Could not add tenant_id to llm_settings: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE llm_settings ADD COLUMN user_id VARCHAR(64)"))
+            conn.commit()
+        logger.info("Added column user_id to llm_settings")
+    except Exception as e:
+        err = str(e).lower()
+        if "duplicate" in err or "already exists" in err or "exists" in err:
+            logger.debug("Column user_id already exists on llm_settings")
+        else:
+            logger.warning("Could not add user_id to llm_settings: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "UPDATE llm_settings SET tenant_id = :tenant_id "
+                    "WHERE tenant_id IS NULL OR TRIM(tenant_id) = ''"
+                ),
+                {"tenant_id": config.AUTH_DEFAULT_TENANT_ID},
+            )
+            conn.execute(
+                text(
+                    "UPDATE llm_settings SET user_id = :user_id "
+                    "WHERE user_id IS NULL OR TRIM(user_id) = ''"
+                ),
+                {"user_id": config.AUTH_DEFAULT_USER_ID},
+            )
+            conn.commit()
+        logger.info("Backfilled llm_settings tenant/user where null")
+    except Exception as e:
+        logger.warning("Could not backfill llm_settings tenant/user: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE llm_settings ADD COLUMN id BIGSERIAL"))
+            conn.commit()
+        logger.info("Added column id to llm_settings")
+    except Exception as e:
+        err = str(e).lower()
+        if "duplicate" in err or "already exists" in err or "exists" in err:
+            logger.debug("Column id already exists on llm_settings")
+        else:
+            logger.warning("Could not add id to llm_settings: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE llm_settings DROP CONSTRAINT llm_settings_pkey"))
+            conn.execute(text("ALTER TABLE llm_settings ADD CONSTRAINT llm_settings_pkey PRIMARY KEY (id)"))
+            conn.commit()
+        logger.info("Updated llm_settings primary key to id")
+    except Exception as e:
+        logger.debug("llm_settings primary key migration skipped: %s", e)
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_llm_settings_tenant_user_provider "
+                    "ON llm_settings (tenant_id, user_id, provider)"
+                )
+            )
+            conn.commit()
+        logger.info("Unique index uq_llm_settings_tenant_user_provider ensured")
+    except Exception as e:
+        logger.warning("Could not ensure uq_llm_settings_tenant_user_provider: %s", e)
+
+    # Scope migration: kb_settings / export_format_settings
+    for table_name in ("kb_settings", "export_format_settings"):
+        for col in ("tenant_id", "user_id"):
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col} VARCHAR(64)"))
+                    conn.commit()
+                logger.info("Added column %s to %s", col, table_name)
+            except Exception as e:
+                err = str(e).lower()
+                if "duplicate" in err or "already exists" in err or "exists" in err:
+                    logger.debug("Column %s already exists on %s", col, table_name)
+                else:
+                    logger.warning("Could not add %s.%s: %s", table_name, col, e)
+        try:
+            with engine.connect() as conn:
+                conn.execute(
+                    text(
+                        f"UPDATE {table_name} SET tenant_id = :tenant_id "
+                        "WHERE tenant_id IS NULL OR TRIM(tenant_id) = ''"
+                    ),
+                    {"tenant_id": config.AUTH_DEFAULT_TENANT_ID},
+                )
+                conn.execute(
+                    text(
+                        f"UPDATE {table_name} SET user_id = :user_id "
+                        "WHERE user_id IS NULL OR TRIM(user_id) = ''"
+                    ),
+                    {"user_id": config.AUTH_DEFAULT_USER_ID},
+                )
+                conn.commit()
+            logger.info("Backfilled %s tenant/user where null", table_name)
+        except Exception as e:
+            logger.warning("Could not backfill %s tenant/user: %s", table_name, e)
+
+    try:
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_kb_settings_tenant_user "
+                    "ON kb_settings (tenant_id, user_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_export_format_tenant_user "
+                    "ON export_format_settings (tenant_id, user_id)"
+                )
+            )
+            conn.commit()
+        logger.info("Unique indexes for scoped kb/export settings ensured")
+    except Exception as e:
+        logger.warning("Could not ensure scoped settings unique indexes: %s", e)
 
 
 @app.get("/health")

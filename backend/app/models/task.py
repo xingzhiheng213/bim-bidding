@@ -12,8 +12,12 @@ class Base(DeclarativeBase):
 
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (
+        Index("ix_tasks_tenant_user_created_at", "tenant_id", "user_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Optional semantic prompt profile (ON DELETE SET NULL on DB side where supported)
     profile_id: Mapped[int | None] = mapped_column(

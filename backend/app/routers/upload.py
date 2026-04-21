@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app import config
+from app.auth import Principal, get_principal
 from app.database import get_db
 from app.models import TaskStep
 from app.services.step_service import require_task
@@ -23,6 +24,7 @@ def upload_file(
     task_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Upload a file for the task.
 
@@ -30,7 +32,7 @@ def upload_file(
     On success, stores the file and marks the upload step as completed.
     Re-uploading replaces the previous file after a successful DB commit.
     """
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     filename = file.filename or ""
     suffix = Path(filename).suffix.lower()
@@ -40,11 +42,11 @@ def upload_file(
             detail=f"Invalid file type; allowed: {', '.join(ALLOWED_EXTENSIONS)}",
         )
 
-    task_dir = config.UPLOAD_DIR / f"task_{task_id}"
+    task_dir = config.UPLOAD_DIR / f"tenant_{principal.tenant_id}" / f"user_{principal.user_id}" / f"task_{task_id}"
     task_dir.mkdir(parents=True, exist_ok=True)
     stored_name = f"{uuid.uuid4().hex}{suffix}"
     dest_path = task_dir / stored_name
-    relative_stored_path = f"task_{task_id}/{stored_name}"
+    relative_stored_path = f"tenant_{principal.tenant_id}/user_{principal.user_id}/task_{task_id}/{stored_name}"
 
     # Fetch existing upload step now so we can recover the old file path before overwriting
     upload_step = (

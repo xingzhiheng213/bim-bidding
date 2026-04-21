@@ -19,6 +19,7 @@ import {
   type TaskDetail,
   type TaskStep,
 } from '../api/tasks'
+import { getIdentityScopeKey } from '../api/client'
 import { designTokens } from '../theme/tokens'
 import '../App.css'
 
@@ -27,8 +28,8 @@ const { Title, Text } = Typography
 const POLL_INTERVAL_MS = 2000
 const CANCELLED_STORAGE_KEY_PREFIX = 'one_click_cancelled_'
 
-function getCancelledStorageKey(taskId: string): string {
-  return CANCELLED_STORAGE_KEY_PREFIX + taskId
+function getCancelledStorageKey(scope: string, taskId: string): string {
+  return `${CANCELLED_STORAGE_KEY_PREFIX}${scope}_${taskId}`
 }
 
 type Phase = 'idle' | 'uploading' | 'running' | 'confirm_framework' | 'done' | 'failed' | 'cancelled'
@@ -153,6 +154,7 @@ function derivePhaseFromTask(data: TaskDetail): { phase: Phase; pipelineStep: Pi
 export default function OneClickTaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
+  const identityScope = getIdentityScopeKey()
   const taskId = id != null ? parseInt(id, 10) : null
   const [phase, setPhase] = useState<Phase>('idle')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -166,7 +168,7 @@ export default function OneClickTaskDetailPage() {
   const hasSyncedFromTaskRef = useRef(false)
 
   const { data: taskData, isFetching, isError, refetch: refetchTask } = useQuery({
-    queryKey: ['task', id ?? ''],
+    queryKey: ['task', identityScope, id ?? ''],
     queryFn: () => getTask(id!),
     enabled: !!id,
     refetchInterval:
@@ -180,7 +182,11 @@ export default function OneClickTaskDetailPage() {
 
   useEffect(() => {
     if (!taskData || taskId == null || hasSyncedFromTaskRef.current) return
-    if (id != null && typeof sessionStorage !== 'undefined' && sessionStorage.getItem(getCancelledStorageKey(id))) {
+    if (
+      id != null &&
+      typeof sessionStorage !== 'undefined' &&
+      sessionStorage.getItem(getCancelledStorageKey(identityScope, id))
+    ) {
       hasSyncedFromTaskRef.current = true
       setPhase('cancelled')
       return
@@ -207,37 +213,37 @@ export default function OneClickTaskDetailPage() {
     if (extractStep?.status === 'failed') {
       setErrorMessage(extractStep.error_message || '解析失败')
       setPhase('failed')
-      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(id))
+      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(identityScope, id))
       return
     }
     if (analyzeStep?.status === 'failed') {
       setErrorMessage(analyzeStep.error_message || '分析失败')
       setPhase('failed')
-      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(id))
+      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(identityScope, id))
       return
     }
     if (paramsStep?.status === 'failed') {
       setErrorMessage(paramsStep.error_message || '参数提取失败')
       setPhase('failed')
-      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(id))
+      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(identityScope, id))
       return
     }
     if (frameworkStep?.status === 'failed') {
       setErrorMessage(frameworkStep.error_message || '框架生成失败')
       setPhase('failed')
-      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(id))
+      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(identityScope, id))
       return
     }
     if (chaptersStep?.status === 'failed') {
       setErrorMessage(chaptersStep.error_message || '按章生成失败')
       setPhase('failed')
-      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(id))
+      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(identityScope, id))
       return
     }
     if (reviewStep?.status === 'failed') {
       setErrorMessage(reviewStep.error_message || '校审失败')
       setPhase('failed')
-      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(id))
+      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(identityScope, id))
       return
     }
 
@@ -288,7 +294,7 @@ export default function OneClickTaskDetailPage() {
       setPipelineStep('done')
       pipelineStepRef.current = 'done'
       setPhase('done')
-      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(id))
+      if (id != null) sessionStorage.removeItem(getCancelledStorageKey(identityScope, id))
     }
   }, [taskData, taskId, phase, id])
 
@@ -311,7 +317,7 @@ export default function OneClickTaskDetailPage() {
       setPhase('running')
       setPipelineStep('extract')
       pipelineStepRef.current = 'extract'
-      queryClient.invalidateQueries({ queryKey: ['task', id] })
+      queryClient.invalidateQueries({ queryKey: ['task', identityScope, id] })
     } catch (e) {
       const detail =
         e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail != null
@@ -339,7 +345,7 @@ export default function OneClickTaskDetailPage() {
       setPipelineStep('chapters')
       pipelineStepRef.current = 'chapters'
       await runChaptersStep(id)
-      queryClient.invalidateQueries({ queryKey: ['task', id] })
+      queryClient.invalidateQueries({ queryKey: ['task', identityScope, id] })
     } catch (e) {
       const detail =
         e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail != null
@@ -364,7 +370,7 @@ export default function OneClickTaskDetailPage() {
       await saveFrameworkPoints(id, points)
       message.success('已保存要点')
       setAddPointsText('')
-      queryClient.invalidateQueries({ queryKey: ['task', id] })
+      queryClient.invalidateQueries({ queryKey: ['task', identityScope, id] })
     } catch (e) {
       const detail =
         e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail != null
@@ -387,7 +393,7 @@ export default function OneClickTaskDetailPage() {
       setPhase('running')
       setPipelineStep('framework')
       pipelineStepRef.current = 'framework'
-      queryClient.invalidateQueries({ queryKey: ['task', id] })
+      queryClient.invalidateQueries({ queryKey: ['task', identityScope, id] })
     } catch (e) {
       const detail =
         e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail != null
@@ -409,18 +415,18 @@ export default function OneClickTaskDetailPage() {
       message.warning('取消请求未生效，请稍后重试')
     }
     if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem(getCancelledStorageKey(id), '1')
+      sessionStorage.setItem(getCancelledStorageKey(identityScope, id), '1')
     }
     setPhase('cancelled')
     setFrameworkModalOpen(false)
-    queryClient.invalidateQueries({ queryKey: ['task', id] })
+    queryClient.invalidateQueries({ queryKey: ['task', identityScope, id] })
     message.info('已取消生成')
   }
 
   const handleResume = async () => {
     if (!id) return
     if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.removeItem(getCancelledStorageKey(id))
+      sessionStorage.removeItem(getCancelledStorageKey(identityScope, id))
     }
     try {
       const { data: latest } = await refetchTask()
@@ -465,7 +471,7 @@ export default function OneClickTaskDetailPage() {
         return
       }
       setPhase('running')
-      queryClient.invalidateQueries({ queryKey: ['task', id] })
+      queryClient.invalidateQueries({ queryKey: ['task', identityScope, id] })
     } catch (e) {
       const detail =
         e && typeof e === 'object' && 'response' in e && (e as { response?: { data?: { detail?: unknown } } }).response?.data?.detail != null

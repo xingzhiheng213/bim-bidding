@@ -4,10 +4,11 @@ import logging
 
 from app import config
 from app.database import SessionLocal
-from app.models import Task, TaskStep
+from app.models import TaskStep
 from app.parser import parse_document
 from celery_app import app
 from sqlalchemy.orm import Session
+from tasks.scope_guard import validate_task_scope
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ def _set_extract_failed(db: Session, task_id: int, error_message: str) -> None:
 
 
 @app.task
-def run_extract(task_id: int) -> None:
+def run_extract(task_id: int, tenant_id: str | None = None, user_id: str | None = None) -> None:
     """Parse uploaded file for task and write text to extract step.
 
     Reads upload step output_snapshot (stored_path), calls parse_document,
@@ -43,9 +44,16 @@ def run_extract(task_id: int) -> None:
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="run_extract",
+            on_failed=lambda msg: _set_extract_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("run_extract: task_id=%s not found", task_id)
             return
 
         upload_step = (

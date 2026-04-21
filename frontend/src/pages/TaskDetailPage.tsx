@@ -33,6 +33,7 @@ import {
   type TaskDetail,
   type TaskStep,
 } from '../api/tasks'
+import { getIdentityScopeKey } from '../api/client'
 import { DiffView } from '../components/DiffView'
 import '../App.css'
 
@@ -54,6 +55,7 @@ function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const identityScope = getIdentityScopeKey()
 
   const {
     data,
@@ -61,7 +63,7 @@ function TaskDetailPage() {
     isError: taskError,
     error: taskErr,
   } = useQuery({
-    queryKey: ['task', id],
+    queryKey: ['task', identityScope, id],
     queryFn: () => getTask(id!),
     enabled: !!id,
     refetchInterval: (query) => {
@@ -83,7 +85,7 @@ function TaskDetailPage() {
       message.success('上传成功')
       try {
         await runExtractStep(taskId)
-        await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+        await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
       } catch (e: unknown) {
         const detail =
           e && typeof e === 'object' && 'response' in e && e.response && typeof e.response === 'object' && 'data' in e.response && e.response.data && typeof e.response.data === 'object' && 'detail' in e.response.data
@@ -100,7 +102,7 @@ function TaskDetailPage() {
     mutationFn: (taskId: string) => runExtractStep(taskId),
     onSuccess: async (_, taskId) => {
       message.success('解析已入队')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -288,7 +290,7 @@ function TaskDetailPage() {
     mutationFn: (taskId: string) => runAnalyzeStep(taskId),
     onSuccess: async (_, taskId) => {
       message.success('分析已入队')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -310,7 +312,7 @@ function TaskDetailPage() {
     mutationFn: (taskId: string) => runParamsStep(taskId),
     onSuccess: async (_, taskId) => {
       message.success('参数提取已入队')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -332,7 +334,7 @@ function TaskDetailPage() {
     mutationFn: (taskId: string) => runFrameworkStep(taskId),
     onSuccess: async (_, taskId) => {
       message.success('框架已入队')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -354,7 +356,7 @@ function TaskDetailPage() {
     mutationFn: (taskId: string) => regenerateFrameworkStep(taskId),
     onSuccess: async (_, taskId) => {
       message.success('框架已重新入队')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -379,7 +381,7 @@ function TaskDetailPage() {
       message.success('已保存要点，可点击「重新生成框架」使框架按您的要点更新')
       setAddPointsModalOpen(false)
       setAddPointsText('')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -399,7 +401,7 @@ function TaskDetailPage() {
       message.success('已接受并继续')
       setAddPointsModalOpen(false)
       setAddPointsText('')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -425,7 +427,7 @@ function TaskDetailPage() {
       runChaptersStep(taskId, chapterNumbers),
     onSuccess: async (_, { taskId }) => {
       message.success('按章生成已入队')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -481,7 +483,7 @@ function TaskDetailPage() {
       setChapterAddPointsModalOpen(false)
       setChapterAddPointsText('')
       setChapterAddPointsForChapter(null)
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =
@@ -506,7 +508,7 @@ function TaskDetailPage() {
     }) => regenerateChapter(taskId, chapterNumber, added_points),
     onSuccess: async (_, { taskId }) => {
       message.success('该章已重新入队')
-      await queryClient.invalidateQueries({ queryKey: ['task', taskId] })
+      await queryClient.invalidateQueries({ queryKey: ['task', identityScope, taskId] })
     },
     onError: (e: unknown) => {
       const detail =

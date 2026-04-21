@@ -11,15 +11,24 @@ from typing import Any
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.auth import Principal
 from app.models import Task, TaskStep
 
 # ---------------------------------------------------------------------------
 # Task / Step lookup helpers
 # ---------------------------------------------------------------------------
 
-def require_task(task_id: int, db: Session) -> Task:
-    """Return the Task or raise HTTP 404."""
-    task = db.query(Task).filter(Task.id == task_id).first()
+def require_task(task_id: int, db: Session, principal: Principal) -> Task:
+    """Return the owned Task or raise HTTP 404."""
+    task = (
+        db.query(Task)
+        .filter(
+            Task.id == task_id,
+            Task.tenant_id == principal.tenant_id,
+            Task.user_id == principal.user_id,
+        )
+        .first()
+    )
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -68,6 +77,7 @@ def dispatch_celery_step(
     step: TaskStep,
     celery_fn: Any,
     db: Session,
+    principal: Principal,
     *celery_args: Any,
     **celery_kwargs: Any,
 ) -> None:
@@ -75,10 +85,15 @@ def dispatch_celery_step(
 
     Any ``output_snapshot`` mutations applied to *step* **before** this call
     are included in the first ``db.commit()``.
+
+    ``tenant_id`` / ``user_id`` are injected into Celery kwargs for worker-side
+    secondary ownership validation.
     """
     step.status = "running"
     step.error_message = None
     db.commit()
+    celery_kwargs.setdefault("tenant_id", principal.tenant_id)
+    celery_kwargs.setdefault("user_id", principal.user_id)
     result = celery_fn.delay(*celery_args, **celery_kwargs)
     step.celery_task_id = result.id
     db.commit()

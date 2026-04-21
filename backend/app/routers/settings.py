@@ -1,9 +1,10 @@
 """Settings API: LLM API keys, base URLs, export format, knowledge base (stage 5.1)."""
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.auth import Principal, get_principal
 from app.knowledge_base import test_ragflow_connection
 from app.prompt_catalog import PromptCatalogResponse, get_prompt_catalog
 from app.settings_store import (
@@ -31,10 +32,15 @@ class PostLlmBody(BaseModel):
 
 
 @router.get("/llm")
-def get_settings_llm():
+def get_settings_llm(principal: Principal = Depends(get_principal)):
     """Return each provider's configured status, masked key, and base_url (no plain key)."""
     try:
-        return {"providers": get_all_providers_status()}
+        return {
+            "providers": get_all_providers_status(
+                tenant_id=principal.tenant_id,
+                user_id=principal.user_id,
+            ),
+        }
     except Exception as e:
         # e.g. llm_settings table missing base_url column (old DB): return safe fallback
         from sqlalchemy.exc import OperationalError, ProgrammingError
@@ -49,23 +55,38 @@ def get_settings_llm():
 
 
 @router.post("/llm")
-def post_settings_llm(body: PostLlmBody):
+def post_settings_llm(body: PostLlmBody, principal: Principal = Depends(get_principal)):
     """Save API key and/or base_url for provider, or clear config when clear=true. Returns configured + masked_key + base_url."""
     if body.provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {body.provider}")
     if body.clear:
         try:
-            clear_llm_config(body.provider)
+            clear_llm_config(
+                body.provider,
+                tenant_id=principal.tenant_id,
+                user_id=principal.user_id,
+            )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"取消配置失败: {e!s}") from e
         return {"provider": body.provider, "configured": False, "masked_key": None, "base_url": None}
     api_key = body.api_key.strip() if body.api_key else ""
     try:
         if api_key:
-            set_api_key_in_db(body.provider, api_key, base_url=body.base_url if body.base_url is not None else None)
+            set_api_key_in_db(
+                body.provider,
+                api_key,
+                base_url=body.base_url if body.base_url is not None else None,
+                tenant_id=principal.tenant_id,
+                user_id=principal.user_id,
+            )
         elif body.base_url is not None:
             try:
-                update_base_url_in_db(body.provider, body.base_url)
+                update_base_url_in_db(
+                    body.provider,
+                    body.base_url,
+                    tenant_id=principal.tenant_id,
+                    user_id=principal.user_id,
+                )
             except ValueError as e:
                 if "No existing config" in str(e):
                     raise HTTPException(status_code=400, detail="请先保存该 provider 的 API Key 后再设置 Base URL") from e
@@ -82,7 +103,10 @@ def post_settings_llm(body: PostLlmBody):
                 detail="数据库结构可能过旧，请执行: ALTER TABLE llm_settings ADD COLUMN base_url VARCHAR(512); 或重新创建表后重试。",
             ) from e
         raise HTTPException(status_code=500, detail=f"保存失败: {e!s}") from e
-    status_list = get_all_providers_status()
+    status_list = get_all_providers_status(
+        tenant_id=principal.tenant_id,
+        user_id=principal.user_id,
+    )
     for s in status_list:
         if s["provider"] == body.provider:
             return {
@@ -127,17 +151,23 @@ def get_settings_export_format_fonts():
 
 
 @router.get("/export-format")
-def get_settings_export_format():
+def get_settings_export_format(principal: Principal = Depends(get_principal)):
     """Return current export format config (defaults when not configured)."""
     try:
-        return get_export_format_config()
+        return get_export_format_config(
+            tenant_id=principal.tenant_id,
+            user_id=principal.user_id,
+        )
     except Exception:
         from app.settings_store import DEFAULT_EXPORT_FORMAT
         return dict(DEFAULT_EXPORT_FORMAT)
 
 
 @router.post("/export-format")
-def post_settings_export_format(body: PostExportFormatBody):
+def post_settings_export_format(
+    body: PostExportFormatBody,
+    principal: Principal = Depends(get_principal),
+):
     """Save export format config; returns full current config."""
     try:
         set_export_format_config(
@@ -153,10 +183,12 @@ def post_settings_export_format(body: PostExportFormatBody):
             table_size_pt=body.table_size_pt,
             first_line_indent_pt=body.first_line_indent_pt,
             line_spacing=body.line_spacing,
+            tenant_id=principal.tenant_id,
+            user_id=principal.user_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    return get_export_format_config()
+    return get_export_format_config(tenant_id=principal.tenant_id, user_id=principal.user_id)
 
 
 # --- Knowledge base (kb_type + RAGFlow config) ---
@@ -172,13 +204,16 @@ class PostKnowledgeBaseBody(BaseModel):
 
 
 @router.get("/knowledge-base")
-def get_settings_knowledge_base():
+def get_settings_knowledge_base(principal: Principal = Depends(get_principal)):
     """Return kb_type and RAGFlow config (masked key only, no plain key)."""
-    return get_kb_config()
+    return get_kb_config(tenant_id=principal.tenant_id, user_id=principal.user_id)
 
 
 @router.post("/knowledge-base")
-def post_settings_knowledge_base(body: PostKnowledgeBaseBody):
+def post_settings_knowledge_base(
+    body: PostKnowledgeBaseBody,
+    principal: Principal = Depends(get_principal),
+):
     """Save kb_type and/or RAGFlow config; returns current config (same as GET)."""
     try:
         set_kb_config(
@@ -186,10 +221,12 @@ def post_settings_knowledge_base(body: PostKnowledgeBaseBody):
             ragflow_api_url=body.ragflow_api_url,
             ragflow_api_key=body.ragflow_api_key,
             ragflow_dataset_ids=body.ragflow_dataset_ids,
+            tenant_id=principal.tenant_id,
+            user_id=principal.user_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-    return get_kb_config()
+    return get_kb_config(tenant_id=principal.tenant_id, user_id=principal.user_id)
 
 
 class PostKnowledgeBaseTestBody(BaseModel):
@@ -201,12 +238,18 @@ class PostKnowledgeBaseTestBody(BaseModel):
 
 
 @router.post("/knowledge-base/test")
-def post_settings_knowledge_base_test(body: PostKnowledgeBaseTestBody):
+def post_settings_knowledge_base_test(
+    body: PostKnowledgeBaseTestBody,
+    principal: Principal = Depends(get_principal),
+):
     """Test RAGFlow connectivity. Uses body values if provided, else saved config. Returns { ok, message }."""
     base_url = (body.ragflow_api_url or "").strip() or None
     api_key = (body.ragflow_api_key or "").strip() or None
     if not base_url or not api_key:
-        effective = get_ragflow_effective()
+        effective = get_ragflow_effective(
+            tenant_id=principal.tenant_id,
+            user_id=principal.user_id,
+        )
         if effective:
             base_url = base_url or effective[0]
             api_key = api_key or effective[1]

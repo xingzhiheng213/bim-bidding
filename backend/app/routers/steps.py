@@ -12,6 +12,7 @@ from tasks.analyze import run_analyze
 from tasks.extract import run_extract
 from tasks.params import run_params
 
+from app.auth import Principal, get_principal
 from app.database import get_db
 from app.services.step_service import (
     dispatch_celery_step,
@@ -24,9 +25,13 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
 @router.post("/{task_id}/steps/extract/run", status_code=202)
-def run_extract_step(task_id: int, db: Session = Depends(get_db)):
+def run_extract_step(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Enqueue document extraction (parse). Requires upload step completed."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     upload_step = require_step_completed(task_id, "upload", db, "请先完成文件上传")
     try:
@@ -39,14 +44,18 @@ def run_extract_step(task_id: int, db: Session = Depends(get_db)):
     step = get_or_create_step(task_id, "extract", db)
     if step.status == "running":
         return {"message": "解析已在进行中", "step_key": "extract"}
-    dispatch_celery_step(step, run_extract, db, task_id)
+    dispatch_celery_step(step, run_extract, db, principal, task_id)
     return {"message": "解析已入队", "step_key": "extract"}
 
 
 @router.post("/{task_id}/steps/analyze/run", status_code=202)
-def run_analyze_step(task_id: int, db: Session = Depends(get_db)):
+def run_analyze_step(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Enqueue LLM analysis. Requires extract step completed."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     extract_step = require_step_completed(task_id, "extract", db, "请先完成文档解析")
     try:
@@ -59,14 +68,18 @@ def run_analyze_step(task_id: int, db: Session = Depends(get_db)):
     step = get_or_create_step(task_id, "analyze", db)
     if step.status == "running":
         return {"message": "分析已在进行中", "step_key": "analyze"}
-    dispatch_celery_step(step, run_analyze, db, task_id)
+    dispatch_celery_step(step, run_analyze, db, principal, task_id)
     return {"message": "分析已入队", "step_key": "analyze"}
 
 
 @router.post("/{task_id}/steps/params/run", status_code=202)
-def run_params_step(task_id: int, db: Session = Depends(get_db)):
+def run_params_step(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Enqueue params extraction. Requires analyze step completed."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     analyze_step = require_step_completed(task_id, "analyze", db, "请先完成分析")
     try:
@@ -79,5 +92,5 @@ def run_params_step(task_id: int, db: Session = Depends(get_db)):
     step = get_or_create_step(task_id, "params", db)
     if step.status == "running":
         return {"message": "参数提取已在进行中", "step_key": "params"}
-    dispatch_celery_step(step, run_params, db, task_id)
+    dispatch_celery_step(step, run_params, db, principal, task_id)
     return {"message": "参数提取已入队", "step_key": "params"}

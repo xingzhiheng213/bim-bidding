@@ -34,6 +34,12 @@ def _get_fernet() -> Fernet:
     return _fernet
 
 
+def _resolve_scope(tenant_id: str | None = None, user_id: str | None = None) -> tuple[str, str]:
+    t = (tenant_id or "").strip() or settings.auth_default_tenant_id
+    u = (user_id or "").strip() or settings.auth_default_user_id
+    return t, u
+
+
 def encrypt_api_key(plain: str) -> str:
     """Encrypt plain API key to base64 string for storage."""
     return _get_fernet().encrypt(plain.encode("utf-8")).decode("ascii")
@@ -54,13 +60,22 @@ def mask_api_key(plain: str) -> str:
     return plain[:2] + "***" + plain[-3:]
 
 
-def get_api_key_from_db(provider: str) -> str | None:
+def get_api_key_from_db(provider: str, tenant_id: str | None = None, user_id: str | None = None) -> str | None:
     """Return decrypted API key for provider from DB, or None."""
     if provider not in SUPPORTED_PROVIDERS:
         return None
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     try:
-        row = db.query(LlmSetting).filter(LlmSetting.provider == provider).first()
+        row = (
+            db.query(LlmSetting)
+            .filter(
+                LlmSetting.provider == provider,
+                LlmSetting.tenant_id == tenant,
+                LlmSetting.user_id == user,
+            )
+            .first()
+        )
         if not row or not row.encrypted_api_key:
             return None
         return decrypt_api_key(row.encrypted_api_key)
@@ -68,13 +83,22 @@ def get_api_key_from_db(provider: str) -> str | None:
         db.close()
 
 
-def get_base_url_from_db(provider: str) -> str | None:
+def get_base_url_from_db(provider: str, tenant_id: str | None = None, user_id: str | None = None) -> str | None:
     """Return base_url for provider from DB, or None (use env default)."""
     if provider not in SUPPORTED_PROVIDERS:
         return None
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     try:
-        row = db.query(LlmSetting).filter(LlmSetting.provider == provider).first()
+        row = (
+            db.query(LlmSetting)
+            .filter(
+                LlmSetting.provider == provider,
+                LlmSetting.tenant_id == tenant,
+                LlmSetting.user_id == user,
+            )
+            .first()
+        )
         if not row or not row.base_url:
             return None
         return row.base_url.rstrip("/") or None
@@ -82,14 +106,29 @@ def get_base_url_from_db(provider: str) -> str | None:
         db.close()
 
 
-def set_api_key_in_db(provider: str, api_key: str, base_url: str | None = None) -> None:
+def set_api_key_in_db(
+    provider: str,
+    api_key: str,
+    base_url: str | None = None,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> None:
     """Encrypt and upsert API key for provider; optionally set base_url (empty string = clear)."""
     if provider not in SUPPORTED_PROVIDERS:
         raise ValueError(f"Unsupported provider: {provider}")
+    tenant, user = _resolve_scope(tenant_id, user_id)
     encrypted = encrypt_api_key(api_key)
     db: Session = SessionLocal()
     try:
-        row = db.query(LlmSetting).filter(LlmSetting.provider == provider).first()
+        row = (
+            db.query(LlmSetting)
+            .filter(
+                LlmSetting.provider == provider,
+                LlmSetting.tenant_id == tenant,
+                LlmSetting.user_id == user,
+            )
+            .first()
+        )
         if row:
             row.encrypted_api_key = encrypted
             row.updated_at = datetime.utcnow()
@@ -97,6 +136,8 @@ def set_api_key_in_db(provider: str, api_key: str, base_url: str | None = None) 
                 row.base_url = base_url.strip() or None
         else:
             db.add(LlmSetting(
+                tenant_id=tenant,
+                user_id=user,
                 provider=provider,
                 encrypted_api_key=encrypted,
                 base_url=base_url.strip() or None if base_url is not None else None,
@@ -106,13 +147,27 @@ def set_api_key_in_db(provider: str, api_key: str, base_url: str | None = None) 
         db.close()
 
 
-def update_base_url_in_db(provider: str, base_url: str | None) -> None:
+def update_base_url_in_db(
+    provider: str,
+    base_url: str | None,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> None:
     """Update only base_url for provider (row must exist). Empty string = clear."""
     if provider not in SUPPORTED_PROVIDERS:
         raise ValueError(f"Unsupported provider: {provider}")
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     try:
-        row = db.query(LlmSetting).filter(LlmSetting.provider == provider).first()
+        row = (
+            db.query(LlmSetting)
+            .filter(
+                LlmSetting.provider == provider,
+                LlmSetting.tenant_id == tenant,
+                LlmSetting.user_id == user,
+            )
+            .first()
+        )
         if not row:
             raise ValueError(f"No existing config for provider: {provider}")
         row.base_url = base_url.strip() or None if base_url else None
@@ -122,25 +177,43 @@ def update_base_url_in_db(provider: str, base_url: str | None) -> None:
         db.close()
 
 
-def clear_llm_config(provider: str) -> None:
+def clear_llm_config(provider: str, tenant_id: str | None = None, user_id: str | None = None) -> None:
     """Remove stored API key and base_url for provider (delete row)."""
     if provider not in SUPPORTED_PROVIDERS:
         raise ValueError(f"Unsupported provider: {provider}")
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     try:
-        db.query(LlmSetting).filter(LlmSetting.provider == provider).delete()
+        (
+            db.query(LlmSetting)
+            .filter(
+                LlmSetting.provider == provider,
+                LlmSetting.tenant_id == tenant,
+                LlmSetting.user_id == user,
+            )
+            .delete()
+        )
         db.commit()
     finally:
         db.close()
 
 
-def get_all_providers_status() -> list[dict]:
+def get_all_providers_status(tenant_id: str | None = None, user_id: str | None = None) -> list[dict]:
     """Return list of {provider, configured, masked_key, base_url} for all supported providers."""
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     result: list[dict] = []
     try:
         for provider in SUPPORTED_PROVIDERS:
-            row = db.query(LlmSetting).filter(LlmSetting.provider == provider).first()
+            row = (
+                db.query(LlmSetting)
+                .filter(
+                    LlmSetting.provider == provider,
+                    LlmSetting.tenant_id == tenant,
+                    LlmSetting.user_id == user,
+                )
+                .first()
+            )
             if row and row.encrypted_api_key:
                 plain = decrypt_api_key(row.encrypted_api_key)
                 result.append({
@@ -203,11 +276,19 @@ def get_supported_export_fonts() -> list[str]:
     return list(SUPPORTED_EXPORT_FONTS)
 
 
-def get_export_format_config() -> dict:
+def get_export_format_config(tenant_id: str | None = None, user_id: str | None = None) -> dict:
     """Return export format config dict (merge DB row with defaults); for 7.2 format_options."""
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     try:
-        row = db.query(ExportFormatSetting).first()
+        row = (
+            db.query(ExportFormatSetting)
+            .filter(
+                ExportFormatSetting.tenant_id == tenant,
+                ExportFormatSetting.user_id == user,
+            )
+            .first()
+        )
         if not row:
             return dict(DEFAULT_EXPORT_FORMAT)
         out = dict(DEFAULT_EXPORT_FORMAT)
@@ -233,6 +314,8 @@ def set_export_format_config(
     table_size_pt: int | None = None,
     first_line_indent_pt: int | None = None,
     line_spacing: float | None = None,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
 ) -> None:
     """Upsert single row of export format settings; validate sizes and ranges."""
     for attr, val in (
@@ -249,11 +332,21 @@ def set_export_format_config(
     if line_spacing is not None and (line_spacing < LINE_SPACING_MIN or line_spacing > LINE_SPACING_MAX):
         raise ValueError(f"行距应在 {LINE_SPACING_MIN}–{LINE_SPACING_MAX} 之间")
 
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     try:
-        row = db.query(ExportFormatSetting).first()
+        row = (
+            db.query(ExportFormatSetting)
+            .filter(
+                ExportFormatSetting.tenant_id == tenant,
+                ExportFormatSetting.user_id == user,
+            )
+            .first()
+        )
         if not row:
             row = ExportFormatSetting(
+                tenant_id=tenant,
+                user_id=user,
                 heading_1_font=heading_1_font.strip() or None if heading_1_font is not None else None,
                 heading_1_size_pt=heading_1_size_pt,
                 heading_2_font=heading_2_font.strip() or None if heading_2_font is not None else None,
@@ -316,11 +409,19 @@ def _kb_config_from_env() -> dict:
     }
 
 
-def get_kb_config() -> dict:
+def get_kb_config(tenant_id: str | None = None, user_id: str | None = None) -> dict:
     """Return kb_type and RAGFlow config (masked key only). From DB row or env default."""
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     try:
-        row = db.query(KbSetting).first()
+        row = (
+            db.query(KbSetting)
+            .filter(
+                KbSetting.tenant_id == tenant,
+                KbSetting.user_id == user,
+            )
+            .first()
+        )
         if not row:
             return _kb_config_from_env()
         plain_key = decrypt_api_key(row.ragflow_encrypted_api_key) if row.ragflow_encrypted_api_key else None
@@ -345,16 +446,28 @@ def set_kb_config(
     ragflow_api_url: str | None = None,
     ragflow_api_key: str | None = None,
     ragflow_dataset_ids: str | None = None,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
 ) -> None:
     """Upsert single row of kb settings. Empty api_key = keep current; empty url/ids = clear or keep per existing."""
     if kb_type not in VALID_KB_TYPES:
         raise ValueError(f"kb_type must be one of {VALID_KB_TYPES}, got {kb_type!r}")
+    tenant, user = _resolve_scope(tenant_id, user_id)
     db: Session = SessionLocal()
     try:
-        row = db.query(KbSetting).first()
+        row = (
+            db.query(KbSetting)
+            .filter(
+                KbSetting.tenant_id == tenant,
+                KbSetting.user_id == user,
+            )
+            .first()
+        )
         now = datetime.utcnow()
         if not row:
             row = KbSetting(
+                tenant_id=tenant,
+                user_id=user,
                 kb_type=kb_type,
                 ragflow_api_url=ragflow_api_url.strip() or None if ragflow_api_url is not None else None,
                 ragflow_encrypted_api_key=encrypt_api_key(ragflow_api_key) if (ragflow_api_key and ragflow_api_key.strip()) else None,
@@ -379,15 +492,26 @@ def set_kb_config(
         db.close()
 
 
-def get_ragflow_effective() -> tuple[str, str, list[str]] | None:
+def get_ragflow_effective(
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> tuple[str, str, list[str]] | None:
     """Return (base_url, api_key, dataset_ids_list) for RAGFlow when kb_type=ragflow; DB first then env. None if not configured."""
     from app import config
-    cfg = get_kb_config()
+    tenant, user = _resolve_scope(tenant_id, user_id)
+    cfg = get_kb_config(tenant, user)
     if cfg.get("kb_type") != "ragflow":
         return None
     db: Session = SessionLocal()
     try:
-        row = db.query(KbSetting).first()
+        row = (
+            db.query(KbSetting)
+            .filter(
+                KbSetting.tenant_id == tenant,
+                KbSetting.user_id == user,
+            )
+            .first()
+        )
         if row and row.kb_type == "ragflow" and row.ragflow_api_url and row.ragflow_encrypted_api_key and row.ragflow_dataset_ids:
             plain = decrypt_api_key(row.ragflow_encrypted_api_key)
             if plain:

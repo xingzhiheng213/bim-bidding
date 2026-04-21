@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import PromptProfile, Task
@@ -31,7 +32,20 @@ def load_merged_semantic_for_task(db: Session, task_id: int) -> dict[str, str]:
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task or not task.profile_id:
         return merge_semantic_overrides(None)
-    profile = db.query(PromptProfile).filter(PromptProfile.id == task.profile_id).first()
+    profile = (
+        db.query(PromptProfile)
+        .filter(
+            PromptProfile.id == task.profile_id,
+            or_(
+                PromptProfile.is_builtin.is_(True),
+                (
+                    (PromptProfile.tenant_id == task.tenant_id)
+                    & (PromptProfile.user_id == task.user_id)
+                ),
+            ),
+        )
+        .first()
+    )
     if not profile:
         return merge_semantic_overrides(None)
     return merge_semantic_overrides(profile.semantic_overrides)

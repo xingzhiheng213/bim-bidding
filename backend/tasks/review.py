@@ -10,7 +10,7 @@ from app import config
 from app.database import SessionLocal
 from app.knowledge_base import search as kb_search
 from app.llm import call_llm
-from app.models import Task, TaskStep
+from app.models import TaskStep
 from app.params_compat import extract_requirements_list
 from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_review_messages, parse_review_output
@@ -22,6 +22,7 @@ from app.review_prompt_assembly import (
 )
 from celery_app import app
 from sqlalchemy.orm import Session
+from tasks.scope_guard import validate_task_scope
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +72,7 @@ def _build_params_summary(params_out: dict) -> str:
 
 
 @app.task
-def run_review(task_id: int) -> None:
+def run_review(task_id: int, tenant_id: str | None = None, user_id: str | None = None) -> None:
     """Run review for all chapters. Requires chapters step completed; reads analyze, params, framework.
 
     For each chapter: KB search -> build_review_messages -> call_llm -> parse_review_output.
@@ -80,9 +81,16 @@ def run_review(task_id: int) -> None:
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="run_review",
+            on_failed=lambda msg: _set_review_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("run_review: task_id=%s not found", task_id)
             return
 
         chapters_step = (
@@ -174,7 +182,7 @@ def run_review(task_id: int) -> None:
             full_name = ch.get("full_name") or f"第{num}章 {ch.get('title', '')}"
             chapter_content = chapters_content.get(str(num)) or ""
 
-            context_chunks = kb_search(query=full_name, top_k=REVIEW_KB_TOP_K)
+            context_chunks = kb_search(query=full_name, top_k=REVIEW_KB_TOP_K, task_id=task_id)
             kb_context = "\n\n".join(context_chunks) if context_chunks else ""
 
             try:
@@ -222,7 +230,12 @@ def run_review(task_id: int) -> None:
 
 
 @app.task
-def run_review_chapter(task_id: int, chapter_number: int) -> None:
+def run_review_chapter(
+    task_id: int,
+    chapter_number: int,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
+) -> None:
     """Run review for a single chapter. Merges result into review step output_snapshot.
 
     Same pre-checks as run_review; validates chapter_number exists in framework and chapters.
@@ -230,9 +243,16 @@ def run_review_chapter(task_id: int, chapter_number: int) -> None:
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="run_review_chapter",
+            on_failed=lambda msg: _set_review_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("run_review_chapter: task_id=%s not found", task_id)
             return
 
         chapters_step = (
@@ -324,7 +344,7 @@ def run_review_chapter(task_id: int, chapter_number: int) -> None:
 
         provider, model = get_llm_for_step("review")
         merged = load_merged_semantic_for_task(db, task_id)
-        context_chunks = kb_search(query=full_name, top_k=REVIEW_KB_TOP_K)
+        context_chunks = kb_search(query=full_name, top_k=REVIEW_KB_TOP_K, task_id=task_id)
         kb_context = "\n\n".join(context_chunks) if context_chunks else ""
 
         try:

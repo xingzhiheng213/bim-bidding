@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from tasks.chapters import regenerate_all_chapters_from_review, regenerate_chapter, run_chapters
 
+from app.auth import Principal, get_principal
 from app.database import get_db
 from app.diff_compare import compute_diff
 from app.models import TaskStep
@@ -25,9 +26,10 @@ def run_chapters_step(
     task_id: int,
     body: RunChaptersRequest | None = None,
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Enqueue chapter generation. Requires framework step completed with a non-empty chapters list."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     framework_step = require_step_completed(task_id, "framework", db, "请先完成并接受框架")
     try:
@@ -56,7 +58,14 @@ def run_chapters_step(
         {"total": total, "current": 0, "chapters": {}},
         ensure_ascii=False,
     )
-    dispatch_celery_step(step, run_chapters, db, task_id, chapter_numbers=chapter_numbers)
+    dispatch_celery_step(
+        step,
+        run_chapters,
+        db,
+        principal,
+        task_id,
+        chapter_numbers=chapter_numbers,
+    )
     return {"message": "按章生成已入队", "step_key": "chapters"}
 
 
@@ -65,9 +74,10 @@ def save_chapter_points(
     task_id: int,
     body: SaveChapterPointsRequest,
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Save user points/suggestions for a chapter (step status remains completed)."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     chapters_step = (
         db.query(TaskStep)
@@ -102,9 +112,10 @@ def regenerate_chapter_step(
     task_id: int,
     body: RegenerateChapterRequest,
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Re-generate a single chapter. Requires chapters step completed and the chapter to exist."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     chapters_step = (
         db.query(TaskStep)
@@ -135,17 +146,28 @@ def regenerate_chapter_step(
 
     output["current"] = body.chapter_number
     chapters_step.output_snapshot = json.dumps(output, ensure_ascii=False)
-    dispatch_celery_step(chapters_step, regenerate_chapter, db, task_id, body.chapter_number)
+    dispatch_celery_step(
+        chapters_step,
+        regenerate_chapter,
+        db,
+        principal,
+        task_id,
+        body.chapter_number,
+    )
     return {"message": "该章已重新入队", "step_key": "chapters"}
 
 
 @router.post("/{task_id}/steps/review/regenerate-all", status_code=202)
-def regenerate_all_from_review_step(task_id: int, db: Session = Depends(get_db)):
+def regenerate_all_from_review_step(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """One-click: regenerate all chapters sequentially using review output as chapter_points.
 
     Enqueues a single Celery task that runs chapters in order to respect API rate limits.
     """
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     chapters_step = (
         db.query(TaskStep)
@@ -167,7 +189,13 @@ def regenerate_all_from_review_step(task_id: int, db: Session = Depends(get_db))
     if not review_step or review_step.status != "completed" or not review_step.output_snapshot:
         raise HTTPException(status_code=400, detail="请先完成校审")
 
-    dispatch_celery_step(chapters_step, regenerate_all_chapters_from_review, db, task_id)
+    dispatch_celery_step(
+        chapters_step,
+        regenerate_all_chapters_from_review,
+        db,
+        principal,
+        task_id,
+    )
     return {"message": "已入队，将按章顺序重生成全部章节", "step_key": "chapters"}
 
 
@@ -176,9 +204,10 @@ def get_chapters_diff(
     task_id: int,
     chapter_number: int = Query(..., description="章节号"),
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Return last regenerate for the given chapter: original vs modified text and structured diff."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
     chapters_step = (
         db.query(TaskStep)
         .filter(TaskStep.task_id == task_id, TaskStep.step_key == "chapters")

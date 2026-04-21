@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   Button,
@@ -25,6 +25,7 @@ import {
   updatePromptProfile,
   type PromptProfileSummary,
 } from '../api/promptProfiles'
+import { getIdentityScopeKey } from '../api/client'
 import { getSemanticSlotModalRow } from '../config/semanticSlotModalDisplay'
 import { useSelectedProfile } from '../context/SelectedProfileContext'
 import { designTokens } from '../theme/tokens'
@@ -56,6 +57,7 @@ export default function SemanticProfilesSection({
   semanticItems: PromptCatalogItem[]
 }) {
   const queryClient = useQueryClient()
+  const identityScope = getIdentityScopeKey()
   const { setSelectedProfileId } = useSelectedProfile()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -75,14 +77,16 @@ export default function SemanticProfilesSection({
     title: string
     content: string
   }>({ open: false, title: '', content: '' })
+  const generationControllersRef = useRef<Set<AbortController>>(new Set())
+  const generationGuardRef = useRef(0)
 
   const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ['prompt-profiles'],
+    queryKey: ['prompt-profiles', identityScope],
     queryFn: listPromptProfiles,
   })
 
   const { data: disciplinesRes } = useQuery({
-    queryKey: ['prompt-profile-disciplines'],
+    queryKey: ['prompt-profile-disciplines', identityScope],
     queryFn: fetchPromptProfileDisciplines,
   })
   const disciplineOptions = disciplinesRes?.items ?? []
@@ -107,7 +111,18 @@ export default function SemanticProfilesSection({
     setSearchParams({}, { replace: true })
   }, [searchParams, setSearchParams, form, semanticItems])
 
+  const abortOngoingGeneration = () => {
+    generationGuardRef.current += 1
+    for (const controller of generationControllersRef.current) {
+      controller.abort()
+    }
+    generationControllersRef.current.clear()
+    setGenSlotKey(null)
+    setGenAllLoading(false)
+  }
+
   const closeModal = () => {
+    abortOngoingGeneration()
     setModalMode('closed')
     setEditingId(null)
     form.resetFields()
@@ -175,7 +190,7 @@ export default function SemanticProfilesSection({
     },
     onSuccess: (data) => {
       message.success('已创建语义配置')
-      queryClient.invalidateQueries({ queryKey: ['prompt-profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['prompt-profiles', identityScope] })
       setSelectedProfileId(data.id)
       closeModal()
     },
@@ -199,7 +214,7 @@ export default function SemanticProfilesSection({
     },
     onSuccess: () => {
       message.success('已保存')
-      queryClient.invalidateQueries({ queryKey: ['prompt-profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['prompt-profiles', identityScope] })
       closeModal()
     },
     onError: (e: Error & { response?: { data?: { detail?: string } } }) => {
@@ -212,7 +227,7 @@ export default function SemanticProfilesSection({
     mutationFn: (id: number) => deletePromptProfile(id),
     onSuccess: () => {
       message.success('已删除')
-      queryClient.invalidateQueries({ queryKey: ['prompt-profiles'] })
+      queryClient.invalidateQueries({ queryKey: ['prompt-profiles', identityScope] })
     },
     onError: (e: Error & { response?: { data?: { detail?: string } } }) => {
       const d = e?.response?.data?.detail
@@ -248,25 +263,31 @@ export default function SemanticProfilesSection({
       message.warning('请先选择专业')
       return
     }
+    const controller = new AbortController()
+    generationControllersRef.current.add(controller)
+    const guard = generationGuardRef.current
     setGenSlotKey(slotKey)
     try {
       const res = await generatePromptProfileSemantic({
         profile_name: name,
         discipline: disc,
         slot_key: slotKey,
-      })
+      }, { signal: controller.signal })
+      if (guard !== generationGuardRef.current || controller.signal.aborted) return
       if (res.text != null && res.text !== '') {
         form.setFieldValue(['semantic_overrides', slotKey], res.text)
         message.success('该槽位已生成')
       }
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string | string[] } } }
+      const err = e as { code?: string; name?: string; response?: { data?: { detail?: string | string[] } } }
+      if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return
       const d = err?.response?.data?.detail
       const msg =
         typeof d === 'string' ? d : Array.isArray(d) ? d.join('; ') : e instanceof Error ? e.message : '生成失败'
       message.error(msg)
     } finally {
-      setGenSlotKey(null)
+      generationControllersRef.current.delete(controller)
+      if (guard === generationGuardRef.current) setGenSlotKey(null)
     }
   }
 
@@ -306,12 +327,16 @@ export default function SemanticProfilesSection({
       message.warning('请先选择专业')
       return
     }
+    const controller = new AbortController()
+    generationControllersRef.current.add(controller)
+    const guard = generationGuardRef.current
     setGenAllLoading(true)
     try {
       const res = await generatePromptProfileSemantic({
         profile_name: name,
         discipline: disc,
-      })
+      }, { signal: controller.signal })
+      if (guard !== generationGuardRef.current || controller.signal.aborted) return
       if (res.overrides) {
         for (const [k, t] of Object.entries(res.overrides)) {
           form.setFieldValue(['semantic_overrides', k], t)
@@ -321,13 +346,15 @@ export default function SemanticProfilesSection({
         message.warning('未收到生成结果')
       }
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { detail?: string | string[] } } }
+      const err = e as { code?: string; name?: string; response?: { data?: { detail?: string | string[] } } }
+      if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return
       const d = err?.response?.data?.detail
       const msg =
         typeof d === 'string' ? d : Array.isArray(d) ? d.join('; ') : e instanceof Error ? e.message : '生成失败'
       message.error(msg)
     } finally {
-      setGenAllLoading(false)
+      generationControllersRef.current.delete(controller)
+      if (guard === generationGuardRef.current) setGenAllLoading(false)
     }
   }
 
@@ -415,6 +442,9 @@ export default function SemanticProfilesSection({
         title={modalMode === 'create' ? '新增语义配置' : readonly ? '查看内置配置' : '编辑语义配置'}
         open={modalMode !== 'closed'}
         onCancel={closeModal}
+        closable={false}
+        maskClosable={false}
+        keyboard={false}
         width={880}
         destroyOnClose
         footer={

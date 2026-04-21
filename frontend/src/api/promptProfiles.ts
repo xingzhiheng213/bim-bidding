@@ -71,10 +71,11 @@ export async function generatePromptProfileSemantic(body: {
   profile_name: string
   discipline: string
   slot_key?: string | null
-}): Promise<GenerateSemanticResponse> {
+}, options?: { signal?: AbortSignal }): Promise<GenerateSemanticResponse> {
   const { data } = await api.post<GenerateSemanticResponse>(
     '/api/prompt-profiles/generate-semantic',
-    body
+    body,
+    { signal: options?.signal }
   )
   return data
 }

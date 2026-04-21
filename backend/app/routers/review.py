@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from tasks.chapters import regenerate_chapter
 from tasks.review import run_review, run_review_chapter
 
+from app.auth import Principal, get_principal
 from app.database import get_db
 from app.models import TaskStep
 from app.schemas.task import AcceptReviewRequest
@@ -26,9 +27,10 @@ def run_review_step(
         None, description="If set, run review for this chapter only"
     ),
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Enqueue review for all chapters or a single chapter. Requires chapters step completed."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     chapters_step = require_step_completed(task_id, "chapters", db, "请先完成按章生成")
     review_step = get_or_create_step(task_id, "review", db)
@@ -64,12 +66,19 @@ def run_review_step(
         ):
             raise HTTPException(status_code=400, detail="框架中无该章节")
 
-        dispatch_celery_step(review_step, run_review_chapter, db, task_id, chapter_number)
+        dispatch_celery_step(
+            review_step,
+            run_review_chapter,
+            db,
+            principal,
+            task_id,
+            chapter_number,
+        )
         return {"message": "单章审查已入队", "step_key": "review"}
 
     if review_step.status == "running":
         return {"message": "审查已在进行中", "step_key": "review"}
-    dispatch_celery_step(review_step, run_review, db, task_id)
+    dispatch_celery_step(review_step, run_review, db, principal, task_id)
     return {"message": "审查已入队", "step_key": "review"}
 
 
@@ -78,9 +87,10 @@ def accept_review_step(
     task_id: int,
     body: AcceptReviewRequest,
     db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
 ):
     """Accept review items for a chapter: write to chapter_points and enqueue chapter regenerate."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     chapters_step = (
         db.query(TaskStep)
@@ -110,5 +120,12 @@ def accept_review_step(
     ch_out["chapter_points"][str(body.chapter_number)] = body.accepted_items
     chapters_step.output_snapshot = json.dumps(ch_out, ensure_ascii=False)
     # dispatch_celery_step will commit the above snapshot along with status="running"
-    dispatch_celery_step(chapters_step, regenerate_chapter, db, task_id, body.chapter_number)
+    dispatch_celery_step(
+        chapters_step,
+        regenerate_chapter,
+        db,
+        principal,
+        task_id,
+        body.chapter_number,
+    )
     return {"message": "已接受校审意见，该章已加入重生成队列", "step_key": "chapters"}

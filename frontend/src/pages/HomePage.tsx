@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Button, Empty, Input, message, Modal, Popconfirm, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { createTask, deleteTask, getTasks, type TaskSummary } from '../api/tasks'
+import { getIdentityScopeKey } from '../api/client'
 import { useSelectedProfile } from '../context/SelectedProfileContext'
 import { designTokens } from '../theme/tokens'
 import { getStepStatusLabel, stepStatusDisplay, type StepStatus } from '../theme/stepStatus'
@@ -23,6 +24,7 @@ function getTaskStatusDisplay(status: string): { tagColor: 'default' | 'primary'
 function HomePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const identityScope = getIdentityScopeKey()
   const { selectedProfileId } = useSelectedProfile()
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createTaskName, setCreateTaskName] = useState('')
@@ -30,7 +32,7 @@ function HomePage() {
     data: tasksData,
     isLoading: tasksLoading,
   } = useQuery({
-    queryKey: ['tasks', selectedProfileId],
+    queryKey: ['tasks', identityScope, selectedProfileId],
     queryFn: () => getTasks(selectedProfileId),
   })
   const createMutation = useMutation({
@@ -41,7 +43,7 @@ function HomePage() {
       }),
     onSuccess: (res) => {
       message.success('任务已创建')
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', identityScope] })
       navigate(`/tasks/${res.id}`)
     },
     onError: (e: unknown) => {
@@ -59,7 +61,7 @@ function HomePage() {
     mutationFn: (taskId: string) => deleteTask(taskId),
     onSuccess: () => {
       message.success('已删除')
-      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['tasks', identityScope] })
     },
     onError: (e: unknown) => {
       const detail =

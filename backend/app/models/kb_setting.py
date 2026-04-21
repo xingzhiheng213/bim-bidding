@@ -1,7 +1,7 @@
 """Knowledge base settings: kb_type (none/ragflow) and RAGFlow config (single row)."""
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.task import Base
@@ -9,8 +9,13 @@ from app.models.task import Base
 
 class KbSetting(Base):
     __tablename__ = "kb_settings"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", name="uq_kb_settings_tenant_user"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False)
     kb_type: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
     ragflow_api_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ragflow_encrypted_api_key: Mapped[str | None] = mapped_column(Text, nullable=True)

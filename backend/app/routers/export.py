@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.auth import Principal, get_principal
 from app.assembler import assemble_full_markdown
 from app.database import get_db
 from app.export_docx import markdown_to_docx
@@ -16,9 +17,13 @@ router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
 @router.get("/{task_id}/download")
-def download_docx(task_id: int, db: Session = Depends(get_db)):
+def download_docx(
+    task_id: int,
+    db: Session = Depends(get_db),
+    principal: Principal = Depends(get_principal),
+):
     """Generate DOCX from the assembled Markdown (chapters + appendix) and stream it."""
-    require_task(task_id, db)
+    require_task(task_id, db, principal)
 
     try:
         md = assemble_full_markdown(task_id, db)

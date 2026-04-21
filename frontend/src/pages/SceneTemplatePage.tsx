@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Alert, Spin, Typography } from 'antd'
 import SemanticProfilesSection from '../components/SemanticProfilesSection'
+import { getIdentityScopeKey } from '../api/client'
 import { getPromptCatalog } from '../api/settings'
 import { designTokens } from '../theme/tokens'
 import '../App.css'
@@ -8,8 +9,9 @@ import '../App.css'
 const { Title, Paragraph } = Typography
 
 export default function SceneTemplatePage() {
+  const identityScope = getIdentityScopeKey()
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['settings', 'prompt-catalog'],
+    queryKey: ['settings', identityScope, 'prompt-catalog'],
     queryFn: getPromptCatalog,
   })
 

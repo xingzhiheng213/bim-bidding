@@ -4,11 +4,12 @@ import logging
 
 from app.database import SessionLocal
 from app.llm import call_llm
-from app.models import Task, TaskStep
+from app.models import TaskStep
 from app.prompt_merge import load_merged_semantic_for_task
 from app.prompts import build_analyze_messages
 from celery_app import app
 from sqlalchemy.orm import Session
+from tasks.scope_guard import validate_task_scope
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def _set_analyze_failed(db: Session, task_id: int, error_message: str) -> None:
 
 
 @app.task
-def run_analyze(task_id: int) -> None:
+def run_analyze(task_id: int, tenant_id: str | None = None, user_id: str | None = None) -> None:
     """Run LLM analysis on extract step text and write result to analyze step.
 
     Reads extract step output_snapshot["text"], calls LLM with analyze prompts,
@@ -47,9 +48,16 @@ def run_analyze(task_id: int) -> None:
     """
     db: Session = SessionLocal()
     try:
-        task = db.query(Task).filter(Task.id == task_id).first()
+        task = validate_task_scope(
+            db,
+            task_id,
+            tenant_id,
+            user_id,
+            logger=logger,
+            task_name="run_analyze",
+            on_failed=lambda msg: _set_analyze_failed(db, task_id, msg),
+        )
         if not task:
-            logger.warning("run_analyze: task_id=%s not found", task_id)
             return
 
         extract_step = (
